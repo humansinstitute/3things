@@ -591,7 +591,7 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
       </div>
     </header>
     <section class="auth-panel" data-login-panel ${session ? "hidden" : ""}>
-      <h2>Sign in with Nostr</h2>
+      <h2>Sign in with Nostr to get started</h2>
       <p class="auth-description">Start with a quick Ephemeral ID or bring your own signer.</p>
       <div class="auth-actions">
         <button class="auth-option" type="button" data-login-method="ephemeral">Sign Up</button>
@@ -611,21 +611,17 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
       <form class="todo-form" method="post" action="/todos">
         <label for="title" class="sr-only">Add a task</label>
         <div class="hero-input-wrapper">
-          <input class="hero-input" data-hero-input id="title" name="title" placeholder="${session ? "Add something else…" : "Sign in to start adding todos"}" autocomplete="off" autofocus required ${session ? "" : "disabled"} />
+          <input class="hero-input" data-hero-input id="title" name="title" placeholder="${session ? "Add something else…" : "Add a task"}" autocomplete="off" autofocus required ${session ? "" : "disabled"} />
         </div>
-        <p class="hero-hint" data-hero-hint ${session ? "hidden" : ""}>Sign in above to add tasks.</p>
+        <p class="hero-hint" data-hero-hint hidden>Sign in above to add tasks.</p>
       </form>
     </section>
     <div class="work-header">
       <h2>Work</h2>
       <a class="archive-toggle" href="${archiveHref}">${archiveLabel}</a>
     </div>
-    <p class="remaining-summary">${
-      session
-        ? remaining === 0
-          ? "All clear."
-          : `${remaining} left to go.`
-        : "Sign in to start tracking your todos."
+    <p class="remaining-summary" ${session ? "" : "hidden"}>${
+      session ? (remaining === 0 ? "All clear." : `${remaining} left to go.`) : ""
     }</p>
     ${renderTodoList(activeTodos, emptyActiveMessage)}
     ${showArchive ? renderArchiveSection(doneTodos, emptyArchiveMessage) : ""}
@@ -636,6 +632,8 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
   <script type="module">
     const LOGIN_KIND = ${LOGIN_EVENT_KIND};
     const DEFAULT_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.devvul.com", "wss://purplepag.es"];
+    const AUTO_LOGIN_METHOD_KEY = "nostr_auto_login_method";
+    const AUTO_LOGIN_PUBKEY_KEY = "nostr_auto_login_pubkey";
     const state = { session: window.__NOSTR_SESSION__ };
 
     const focusInput = () => {
@@ -670,17 +668,21 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
       updateAvatar();
     };
 
+    // Single place to trigger a UI redraw after state mutations.
+    const refreshUI = () => {
+      updatePanels();
+    };
+
     const updateHeroState = () => {
       if (heroInput instanceof HTMLInputElement) {
         heroInput.disabled = !state.session;
-        heroInput.placeholder = state.session ? "Add something else…" : "Sign in to start adding todos";
+        heroInput.placeholder = state.session ? "Add something else…" : "Add a task";
         if (state.session) {
           heroInput.focus();
         }
       }
       if (heroHint instanceof HTMLElement) {
-        if (state.session) heroHint.setAttribute("hidden", "hidden");
-        else heroHint.removeAttribute("hidden");
+        heroHint.setAttribute("hidden", "hidden");
       }
     };
 
@@ -694,6 +696,11 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
       if (!errorTarget) return;
       errorTarget.textContent = "";
       errorTarget.setAttribute("hidden", "hidden");
+    };
+
+    const clearAutoLogin = () => {
+      localStorage.removeItem(AUTO_LOGIN_METHOD_KEY);
+      localStorage.removeItem(AUTO_LOGIN_PUBKEY_KEY);
     };
 
     const loadNostrLibs = async () => {
@@ -721,6 +728,7 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
     let profilePool;
     let avatarMenuWatcherActive = false;
     let avatarRequestId = 0;
+    let autoLoginAttempted = false;
 
     const fallbackAvatarUrl = (pubkey) => \`https://robohash.org/\${pubkey || "nostr"}.png?set=set3\`;
 
@@ -857,6 +865,21 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
       });
     });
 
+    const maybeAutoLogin = async () => {
+      if (autoLoginAttempted || state.session) return;
+      autoLoginAttempted = true;
+      const method = localStorage.getItem(AUTO_LOGIN_METHOD_KEY);
+      const hasSecret = !!localStorage.getItem("nostr_ephemeral_secret");
+      if (method !== "ephemeral" || !hasSecret) return;
+      try {
+        const signedEvent = await signLoginEvent("ephemeral");
+        await completeLogin("ephemeral", signedEvent);
+      } catch (err) {
+        console.error("Auto login failed", err);
+        clearAutoLogin();
+      }
+    };
+
     const bunkerForm = document.querySelector("[data-bunker-form]");
     bunkerForm?.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -931,17 +954,25 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
         throw new Error(message);
       }
       state.session = await response.json();
-      updatePanels();
+      if (method === "ephemeral") {
+        localStorage.setItem(AUTO_LOGIN_METHOD_KEY, "ephemeral");
+        localStorage.setItem(AUTO_LOGIN_PUBKEY_KEY, state.session.pubkey);
+      } else {
+        clearAutoLogin();
+      }
+      refreshUI();
     }
 
     logoutBtn?.addEventListener("click", async () => {
       closeAvatarMenu();
       await fetch("/auth/logout", { method: "POST" });
       state.session = null;
-      updatePanels();
+      clearAutoLogin();
+      refreshUI();
     });
 
-    updatePanels();
+    refreshUI();
+    maybeAutoLogin();
   </script>
 </body>
 </html>`;
