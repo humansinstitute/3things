@@ -5,4 +5,5 @@
 - When mutating client-side state in the inline script, call `refreshUI()` so the login controls, hero input, and other UI panels redraw correctly.
 - Keep the existing routes and forms intact (`/todos`, `/todos/:id/update`, `/todos/:id/state`, `/todos/:id/delete`, `/auth/login`, `/auth/logout`) to avoid breaking submissions.
 - Always check for syntax errors before submitting changes by running the app locally and watching the console output.
+- Ensure you always review links to images when presented in a prompt.
 - Commit every change with a clear message so rollbacks stay easy, and avoid touching unrelated local edits.
