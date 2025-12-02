@@ -649,6 +649,7 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
         </button>
         <div class="avatar-menu" data-avatar-menu hidden>
           <button type="button" data-export-secret ${session?.method === "ephemeral" ? "" : "hidden"}>Export Secret</button>
+          <button type="button" data-copy-id ${session ? "" : "hidden"}>Copy ID</button>
           <button type="button" data-logout>Log out</button>
         </div>
       </div>
@@ -734,6 +735,7 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
     const sessionControls = document.querySelector("[data-session-controls]");
     const errorTarget = document.querySelector("[data-login-error]");
     const logoutBtn = document.querySelector("[data-logout]");
+    const copyIdBtn = document.querySelector("[data-copy-id]");
     const heroInput = document.querySelector("[data-hero-input]");
     const heroHint = document.querySelector("[data-hero-hint]");
     const avatarButton = document.querySelector("[data-avatar]");
@@ -1191,6 +1193,26 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
       } catch (err) {
         console.error(err);
         alert("Failed to export secret key.");
+      }
+    });
+
+    copyIdBtn?.addEventListener("click", async () => {
+      closeAvatarMenu();
+      const npub = state.session?.npub;
+      if (!npub) {
+        alert("No ID available.");
+        return;
+      }
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(npub);
+          alert("ID copied to clipboard.");
+        } else {
+          prompt("Copy your ID:", npub);
+        }
+      } catch (err) {
+        console.error(err);
+        prompt("Copy your ID:", npub);
       }
     });
 
