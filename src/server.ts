@@ -679,6 +679,15 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
         <p class="hero-hint" data-hero-hint hidden>Sign in above to add tasks.</p>
       </form>
     </section>
+    <div class="work-header">
+      <h2>Work</h2>
+      <a class="archive-toggle" href="${archiveHref}">${archiveLabel}</a>
+    </div>
+    <p class="remaining-summary" ${session ? "" : "hidden"}>${
+      session ? (remaining === 0 ? "All clear." : `${remaining} left to go.`) : ""
+    }</p>
+    ${renderTodoList(activeTodos, emptyActiveMessage)}
+    ${showArchive ? renderArchiveSection(doneTodos, emptyArchiveMessage) : ""}
     <section class="summary-panel" data-summary-panel hidden>
       <div class="section-heading">
         <h2>Summaries</h2>
@@ -699,15 +708,6 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
         </article>
       </div>
     </section>
-    <div class="work-header">
-      <h2>Work</h2>
-      <a class="archive-toggle" href="${archiveHref}">${archiveLabel}</a>
-    </div>
-    <p class="remaining-summary" ${session ? "" : "hidden"}>${
-      session ? (remaining === 0 ? "All clear." : `${remaining} left to go.`) : ""
-    }</p>
-    ${renderTodoList(activeTodos, emptyActiveMessage)}
-    ${showArchive ? renderArchiveSection(doneTodos, emptyArchiveMessage) : ""}
   </main>
   <script>
     window.__NOSTR_SESSION__ = ${JSON.stringify(session ?? null)};
