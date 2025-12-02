@@ -1279,10 +1279,9 @@ function handleAiTasks(_req: Request, url: URL, match: RegExpMatchArray) {
   if (!Number.isFinite(days) || days <= 0) return jsonResponse({ message: "Invalid day range." }, 400);
 
   const includeUnscheduled = (match[2] || "yes").toLowerCase() !== "no";
-  const today = formatLocalDate(new Date());
   const endDate = formatLocalDate(addDays(new Date(), Math.max(days - 1, 0)));
 
-  const scheduled = listScheduledTodos(owner, today, endDate);
+  const scheduled = listScheduledTodos(owner, endDate);
   const unscheduled = includeUnscheduled ? listUnscheduledTodos(owner) : [];
 
   return jsonResponse({

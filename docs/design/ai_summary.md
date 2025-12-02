@@ -63,6 +63,7 @@ Design for the "Summary" feature that lets a local AI agent fetch upcoming todos
       ]
     }
     ```
+  - Overdue handling: tasks with `scheduled_for` in the past are included in `scheduled` (treated as urgent “today”) even if older than the start date; we cap only by the provided end date (`today + days - 1`).
   - Empty result: `scheduled: []` and `unscheduled: []` as applicable; no error.
 
 ### Post summaries

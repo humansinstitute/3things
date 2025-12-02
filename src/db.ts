@@ -78,7 +78,7 @@ const listScheduledStmt = db.query<Todo>(
      AND owner = ?
      AND scheduled_for IS NOT NULL
      AND scheduled_for != ''
-     AND date(scheduled_for) BETWEEN date(?) AND date(?)
+     AND date(scheduled_for) <= date(?)
    ORDER BY scheduled_for ASC, created_at DESC`
 );
 const listUnscheduledStmt = db.query<Todo>(
@@ -140,8 +140,8 @@ export function listTodos(owner: string | null) {
   return listByOwnerStmt.all(owner);
 }
 
-export function listScheduledTodos(owner: string, startDate: string, endDate: string) {
-  return listScheduledStmt.all(owner, startDate, endDate);
+export function listScheduledTodos(owner: string, endDate: string) {
+  return listScheduledStmt.all(owner, endDate);
 }
 
 export function listUnscheduledTodos(owner: string) {
