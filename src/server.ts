@@ -1046,13 +1046,17 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
       autoLoginAttempted = true;
       const method = localStorage.getItem(AUTO_LOGIN_METHOD_KEY);
       const hasSecret = !!localStorage.getItem("nostr_ephemeral_secret");
-      if (method !== "ephemeral" || !hasSecret) return;
+      if (method !== "ephemeral" || !hasSecret) {
+        autoLoginAttempted = false;
+        return;
+      }
       try {
         const signedEvent = await signLoginEvent("ephemeral");
         await completeLogin("ephemeral", signedEvent);
       } catch (err) {
         console.error("Auto login failed", err);
         clearAutoLogin();
+        autoLoginAttempted = false;
       }
     };
 
@@ -1229,7 +1233,12 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
     if (state.session) {
       void fetchSummaries();
     }
-    maybeAutoLogin();
+    void maybeAutoLogin();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && !state.session) {
+        void maybeAutoLogin();
+      }
+    });
   </script>
 </body>
 </html>`;
