@@ -5,6 +5,7 @@ import { verifyEvent } from "nostr-tools/pure";
 
 import {
   addTodo,
+  addTodoFull,
   deleteTodo,
   getLatestSummaries,
   listScheduledTodos,
@@ -83,7 +84,9 @@ const server = Bun.serve({
     }
 
     if (req.method === "GET" && pathname === "/") {
-      return new Response(renderPage({ showArchive: url.searchParams.get("archive") === "1", session }), {
+      const tagsParam = url.searchParams.get("tags");
+      const filterTags = tagsParam ? tagsParam.split(",").map((t) => t.trim()).filter(Boolean) : [];
+      return new Response(renderPage({ showArchive: url.searchParams.get("archive") === "1", session, filterTags }), {
         headers: { "Content-Type": "text/html; charset=utf-8" },
       });
     }
@@ -100,12 +103,17 @@ const server = Bun.serve({
       return handleSummaryPost(req);
     }
 
+    if (req.method === "POST" && pathname === "/ai/tasks") {
+      return handleAiTasksPost(req);
+    }
+
     if (req.method === "POST") {
       const form = await req.formData();
 
       if (pathname === "/todos") {
         if (!session) return unauthorized();
-        addTodo(String(form.get("title") ?? ""), session.npub);
+        const tags = String(form.get("tags") ?? "");
+        addTodo(String(form.get("title") ?? ""), session.npub, tags);
         return redirect("/");
       }
 
@@ -174,13 +182,27 @@ function unauthorized() {
   return new Response("Unauthorized", { status: 401 });
 }
 
-function renderPage({ showArchive, session }: { showArchive: boolean; session: Session | null }) {
-  const todos = session ? listTodos(session.npub) : [];
+function renderPage({ showArchive, session, filterTags = [] }: { showArchive: boolean; session: Session | null; filterTags?: string[] }) {
+  // Get all todos (unfiltered) to collect all available tags
+  const allTodos = session ? listTodos(session.npub) : [];
+  // Get filtered todos for display
+  const todos = filterTags.length > 0 ? allTodos.filter((todo) => {
+    const todoTags = todo.tags ? todo.tags.split(",").map((t) => t.trim().toLowerCase()) : [];
+    return filterTags.some((ft) => todoTags.includes(ft.toLowerCase()));
+  }) : allTodos;
   const activeTodos = todos.filter((t) => t.state !== "done");
   const doneTodos = todos.filter((t) => t.state === "done");
   const remaining = session ? activeTodos.length : 0;
   const archiveHref = showArchive ? "/" : "/?archive=1";
   const archiveLabel = showArchive ? "Hide archive" : `Archive (${doneTodos.length})`;
+  // Collect all unique tags from all todos
+  const allTags = new Set<string>();
+  for (const todo of allTodos) {
+    if (todo.tags) {
+      todo.tags.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean).forEach((t) => allTags.add(t));
+    }
+  }
+  const tagFilterBar = session && allTags.size > 0 ? renderTagFilterBar(Array.from(allTags), filterTags, showArchive) : "";
   const emptyActiveMessage = session ? "No active work. Add something new!" : "Sign in to view your todos.";
   const emptyArchiveMessage = session ? "Nothing archived yet." : "Sign in to view your archive.";
 
@@ -406,6 +428,83 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
     .badge.state-ready {
       background: #fff2f0;
       border-color: #ffcfc3;
+    }
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      background: #f3f0ff;
+      border: 1px solid #d4c9ff;
+      border-radius: 999px;
+      padding: 0.1rem 0.5rem;
+      font-size: 0.75rem;
+      color: #5b4b8a;
+    }
+    .tag-chip .remove-tag {
+      cursor: pointer;
+      font-size: 0.9rem;
+      line-height: 1;
+      opacity: 0.6;
+    }
+    .tag-chip .remove-tag:hover {
+      opacity: 1;
+    }
+    .tags-display {
+      display: flex;
+      gap: 0.3rem;
+      flex-wrap: wrap;
+    }
+    .tag-input-wrapper {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      padding: 0.4rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fff;
+      min-height: 2.2rem;
+      align-items: center;
+      cursor: text;
+    }
+    .tag-input-wrapper:focus-within {
+      border-color: #666;
+      outline: none;
+    }
+    .tag-input-wrapper input {
+      border: none;
+      outline: none;
+      flex: 1;
+      min-width: 60px;
+      font-size: 0.9rem;
+      padding: 0.2rem;
+    }
+    .tag-filter-bar {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+      padding: 0.5rem;
+      background: #fafafa;
+      border-radius: 6px;
+    }
+    .tag-filter-bar .label {
+      font-size: 0.85rem;
+      color: #666;
+    }
+    .tag-filter-bar .tag-chip {
+      cursor: pointer;
+    }
+    .tag-filter-bar .tag-chip.active {
+      background: #5b4b8a;
+      color: #fff;
+      border-color: #5b4b8a;
+    }
+    .tag-filter-bar .clear-filters {
+      font-size: 0.8rem;
+      color: #666;
+      text-decoration: underline;
+      cursor: pointer;
     }
     .todo-body {
       margin-top: 0.75rem;
@@ -746,6 +845,7 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
     <p class="remaining-summary" ${session ? "" : "hidden"}>${
       session ? (remaining === 0 ? "All clear." : `${remaining} left to go.`) : ""
     }</p>
+    ${tagFilterBar}
     ${renderTodoList(activeTodos, emptyActiveMessage)}
     ${showArchive ? renderArchiveSection(doneTodos, emptyArchiveMessage) : ""}
     <section class="summary-panel" data-summary-panel hidden>
@@ -1397,9 +1497,100 @@ function renderPage({ showArchive, session }: { showArchive: boolean; session: S
         void maybeAutoLogin();
       }
     });
+
+    // Tag input functionality
+    function initTagInputs() {
+      document.querySelectorAll(".tag-input-wrapper").forEach((wrapper) => {
+        const input = wrapper.querySelector("input[type='text']");
+        const hiddenInput = wrapper.querySelector("input[type='hidden']");
+        if (!input || !hiddenInput) return;
+
+        function syncTags() {
+          const chips = wrapper.querySelectorAll(".tag-chip");
+          const tags = Array.from(chips).map((c) => c.dataset.tag).filter(Boolean);
+          hiddenInput.value = tags.join(",");
+        }
+
+        function addTag(text) {
+          const tag = text.trim().toLowerCase().replace(/,/g, "");
+          if (!tag) return;
+          // Check for duplicates
+          const existing = wrapper.querySelectorAll(".tag-chip");
+          for (const chip of existing) {
+            if (chip.dataset.tag === tag) return;
+          }
+          const chip = document.createElement("span");
+          chip.className = "tag-chip";
+          chip.dataset.tag = tag;
+          chip.innerHTML = tag + '<span class="remove-tag">&times;</span>';
+          chip.querySelector(".remove-tag").addEventListener("click", () => {
+            chip.remove();
+            syncTags();
+          });
+          wrapper.insertBefore(chip, input);
+          syncTags();
+        }
+
+        function removeLastTag() {
+          const chips = wrapper.querySelectorAll(".tag-chip");
+          if (chips.length > 0) {
+            chips[chips.length - 1].remove();
+            syncTags();
+          }
+        }
+
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "," || e.key === "Enter") {
+            e.preventDefault();
+            addTag(input.value);
+            input.value = "";
+          } else if (e.key === "Backspace" && input.value === "") {
+            removeLastTag();
+          }
+        });
+
+        input.addEventListener("blur", () => {
+          if (input.value.trim()) {
+            addTag(input.value);
+            input.value = "";
+          }
+        });
+
+        wrapper.addEventListener("click", () => input.focus());
+
+        // Initialize existing chips' remove buttons
+        wrapper.querySelectorAll(".tag-chip .remove-tag").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            btn.parentElement.remove();
+            syncTags();
+          });
+        });
+      });
+    }
+
+    initTagInputs();
   </script>
 </body>
 </html>`;
+}
+
+function renderTagFilterBar(allTags: string[], activeTags: string[], showArchive: boolean) {
+  const baseUrl = showArchive ? "/?archive=1" : "/";
+  const chips = allTags.sort().map((tag) => {
+    const isActive = activeTags.some((t) => t.toLowerCase() === tag.toLowerCase());
+    // Toggle: if active, remove from filter; if not, add to filter
+    let newTags: string[];
+    if (isActive) {
+      newTags = activeTags.filter((t) => t.toLowerCase() !== tag.toLowerCase());
+    } else {
+      newTags = [...activeTags, tag];
+    }
+    const href = newTags.length > 0 ? `${baseUrl}${showArchive ? "&" : "?"}tags=${newTags.join(",")}` : baseUrl;
+    return `<a href="${href}" class="tag-chip${isActive ? " active" : ""}">${escapeHtml(tag)}</a>`;
+  }).join("");
+  const clearHref = baseUrl;
+  const clearLink = activeTags.length > 0 ? `<a href="${clearHref}" class="clear-filters">Clear filters</a>` : "";
+  return `<div class="tag-filter-bar"><span class="label">Filter by tag:</span>${chips}${clearLink}</div>`;
 }
 
 function renderTodoList(todos: Todo[], emptyMessage: string) {
@@ -1586,6 +1777,80 @@ function handleLatestSummary(url: URL) {
   });
 }
 
+type TaskInput = {
+  title?: string;
+  description?: string;
+  priority?: string;
+  state?: string;
+  scheduled_for?: string | null;
+  tags?: string;
+};
+
+type AiTasksPostBody = {
+  owner?: string;
+  tasks?: TaskInput[];
+};
+
+const MAX_TASKS_PER_REQUEST = 50;
+const MAX_TITLE_LENGTH = 500;
+
+async function handleAiTasksPost(req: Request) {
+  const body = (await safeJson(req)) as AiTasksPostBody | null;
+
+  if (!body?.owner) {
+    return jsonResponse({ message: "Missing owner." }, 400);
+  }
+
+  if (!Array.isArray(body.tasks) || body.tasks.length === 0) {
+    return jsonResponse({ message: "Missing or empty tasks array." }, 400);
+  }
+
+  if (body.tasks.length > MAX_TASKS_PER_REQUEST) {
+    return jsonResponse({ message: `Maximum ${MAX_TASKS_PER_REQUEST} tasks per request.` }, 400);
+  }
+
+  const created: Todo[] = [];
+  const failed: Array<{ index: number; title?: string; reason: string }> = [];
+
+  for (let i = 0; i < body.tasks.length; i++) {
+    const task = body.tasks[i];
+    const title = task.title?.trim().slice(0, MAX_TITLE_LENGTH);
+
+    if (!title) {
+      failed.push({ index: i, title: task.title, reason: "Missing or empty title." });
+      continue;
+    }
+
+    const priority = normalizePriority(task.priority ?? "sand");
+    const state = normalizeState(task.state ?? "new");
+    const scheduled_for = task.scheduled_for && isValidDateString(task.scheduled_for) ? task.scheduled_for : null;
+    const tags = task.tags?.trim() ?? "";
+    const description = task.description?.trim() ?? "";
+
+    const todo = addTodoFull(body.owner, {
+      title,
+      description,
+      priority,
+      state,
+      scheduled_for,
+      tags,
+    });
+
+    if (todo) {
+      created.push(todo);
+    } else {
+      failed.push({ index: i, title, reason: "Failed to create task." });
+    }
+  }
+
+  return jsonResponse({
+    owner: body.owner,
+    created_at: new Date().toISOString(),
+    created,
+    failed,
+  });
+}
+
 function formatLocalDate(date: Date) {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
@@ -1630,7 +1895,7 @@ function escapeHtml(input: string) {
 }
 
 function parseUpdateForm(form: FormData):
-  | { title: string; description: string; priority: TodoPriority; state: TodoState; scheduled_for: string | null }
+  | { title: string; description: string; priority: TodoPriority; state: TodoState; scheduled_for: string | null; tags: string }
   | null {
   const title = String(form.get("title") ?? "").trim();
   if (!title) return null;
@@ -1639,7 +1904,8 @@ function parseUpdateForm(form: FormData):
   const state = normalizeState(String(form.get("state") ?? "ready"));
   const scheduledRaw = String(form.get("scheduled_for") ?? "").trim();
   const scheduled_for = scheduledRaw && isValidDateString(scheduledRaw) ? scheduledRaw : null;
-  return { title, description, priority, state, scheduled_for };
+  const tags = String(form.get("tags") ?? "").trim();
+  return { title, description, priority, state, scheduled_for, tags };
 }
 
 function normalizePriority(input: string): TodoPriority {
@@ -1656,11 +1922,32 @@ function normalizeState(input: string): TodoState {
   return "ready";
 }
 
+function renderTagsDisplay(tags: string) {
+  if (!tags) return "";
+  const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
+  if (tagList.length === 0) return "";
+  return `<span class="tags-display">${tagList.map((t) => `<span class="tag-chip">${escapeHtml(t)}</span>`).join("")}</span>`;
+}
+
+function renderTagsInput(tags: string) {
+  const tagList = tags ? tags.split(",").map((t) => t.trim()).filter(Boolean) : [];
+  const chips = tagList.map((t) => `<span class="tag-chip" data-tag="${escapeHtml(t)}">${escapeHtml(t)}<span class="remove-tag">&times;</span></span>`).join("");
+  return `
+    <label>Tags
+      <div class="tag-input-wrapper">
+        ${chips}
+        <input type="text" placeholder="Type and press comma..." />
+        <input type="hidden" name="tags" value="${escapeHtml(tags)}" />
+      </div>
+    </label>`;
+}
+
 function renderTodoItem(todo: Todo) {
   const description = todo.description ? `<p class="todo-description">${escapeHtml(todo.description)}</p>` : "";
   const scheduled = todo.scheduled_for
     ? `<p class="todo-description"><strong>Scheduled for:</strong> ${escapeHtml(todo.scheduled_for)}</p>`
     : "";
+  const tagsDisplay = renderTagsDisplay(todo.tags);
   return `
     <li>
       <details>
@@ -1669,6 +1956,7 @@ function renderTodoItem(todo: Todo) {
           <span class="badges">
             <span class="badge priority-${todo.priority}">${formatPriorityLabel(todo.priority)}</span>
             <span class="badge state-${todo.state}">${formatStateLabel(todo.state)}</span>
+            ${tagsDisplay}
           </span>
         </summary>
         <div class="todo-body">
@@ -1699,6 +1987,7 @@ function renderTodoItem(todo: Todo) {
             <label>Scheduled For
               <input type="date" name="scheduled_for" value="${todo.scheduled_for ? escapeHtml(todo.scheduled_for) : ""}" />
             </label>
+            ${renderTagsInput(todo.tags)}
             <button type="submit">Update</button>
           </form>
           ${renderLifecycleActions(todo)}

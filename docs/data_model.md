@@ -19,6 +19,7 @@ Tasks owned by a user.
 | `owner`        | TEXT    | npub; required                                          |
 | `created_at`   | TEXT    | Default `CURRENT_TIMESTAMP`                             |
 | `scheduled_for`| TEXT    | `YYYY-MM-DD` or NULL; used for horizon and overdue logic |
+| `tags`         | TEXT    | Comma-separated tags (e.g., `"work,urgent"`); default `''` |
 
 Behavior:
 - Soft delete via `deleted`.
@@ -56,6 +57,7 @@ Selection rules:
 - Archive: `state = 'done'`.
 - Scheduled feed: `scheduled_for` <= requested end date (includes overdue).
 - Unscheduled feed: `scheduled_for IS NULL OR = ''`.
+- Tag filtered: todos where `tags` contains at least one of the requested tags (case-insensitive match).
 
 ## Not Stored
 - Sessions are kept in-memory (`sessions` Map in `src/server.ts`), not in SQLite.

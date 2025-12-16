@@ -14,6 +14,7 @@ export type Todo = {
   deleted: number;
   created_at: string;
   scheduled_for: string | null;
+  tags: string;
 };
 
 export type Summary = {
@@ -54,6 +55,7 @@ addColumn("ALTER TABLE todos ADD COLUMN state TEXT NOT NULL DEFAULT 'new'");
 addColumn("ALTER TABLE todos ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0");
 addColumn("ALTER TABLE todos ADD COLUMN owner TEXT NOT NULL DEFAULT ''");
 addColumn("ALTER TABLE todos ADD COLUMN scheduled_for TEXT DEFAULT NULL");
+addColumn("ALTER TABLE todos ADD COLUMN tags TEXT DEFAULT ''");
 
 db.run(`
   CREATE TABLE IF NOT EXISTS ai_summaries (
@@ -89,7 +91,12 @@ const listUnscheduledStmt = db.query<Todo>(
    ORDER BY created_at DESC`
 );
 const insertStmt = db.query(
-  "INSERT INTO todos (title, description, priority, state, done, owner) VALUES (?, '', 'sand', 'new', 0, ?) RETURNING *"
+  "INSERT INTO todos (title, description, priority, state, done, owner, tags) VALUES (?, '', 'sand', 'new', 0, ?, ?) RETURNING *"
+);
+const insertFullStmt = db.query<Todo>(
+  `INSERT INTO todos (title, description, priority, state, done, owner, scheduled_for, tags)
+   VALUES (?, ?, ?, ?, CASE WHEN ? = 'done' THEN 1 ELSE 0 END, ?, ?, ?)
+   RETURNING *`
 );
 const deleteStmt = db.query("UPDATE todos SET deleted = 1 WHERE id = ? AND owner = ?");
 const updateStmt = db.query<Todo>(
@@ -100,7 +107,8 @@ const updateStmt = db.query<Todo>(
     priority = ?,
     state = ?,
     done = CASE WHEN ? = 'done' THEN 1 ELSE 0 END,
-    scheduled_for = ?
+    scheduled_for = ?,
+    tags = ?
    WHERE id = ? AND owner = ?
    RETURNING *`
 );
@@ -135,9 +143,15 @@ const latestWeekSummaryStmt = db.query<Summary>(
    LIMIT 1`
 );
 
-export function listTodos(owner: string | null) {
+export function listTodos(owner: string | null, filterTags?: string[]) {
   if (!owner) return [];
-  return listByOwnerStmt.all(owner);
+  const todos = listByOwnerStmt.all(owner);
+  if (!filterTags || filterTags.length === 0) return todos;
+  // Filter todos that have at least one of the specified tags
+  return todos.filter((todo) => {
+    const todoTags = todo.tags ? todo.tags.split(",").map((t) => t.trim().toLowerCase()) : [];
+    return filterTags.some((ft) => todoTags.includes(ft.toLowerCase()));
+  });
 }
 
 export function listScheduledTodos(owner: string, endDate: string) {
@@ -148,9 +162,40 @@ export function listUnscheduledTodos(owner: string) {
   return listUnscheduledStmt.all(owner);
 }
 
-export function addTodo(title: string, owner: string) {
+export function addTodo(title: string, owner: string, tags: string = "") {
   if (!title.trim()) return null;
-  const todo = insertStmt.get(title.trim(), owner) as Todo | undefined;
+  const todo = insertStmt.get(title.trim(), owner, tags) as Todo | undefined;
+  return todo ?? null;
+}
+
+export function addTodoFull(
+  owner: string,
+  fields: {
+    title: string;
+    description?: string;
+    priority?: TodoPriority;
+    state?: TodoState;
+    scheduled_for?: string | null;
+    tags?: string;
+  }
+) {
+  const title = fields.title?.trim();
+  if (!title) return null;
+  const description = fields.description?.trim() ?? "";
+  const priority = fields.priority ?? "sand";
+  const state = fields.state ?? "new";
+  const scheduled_for = fields.scheduled_for ?? null;
+  const tags = fields.tags?.trim() ?? "";
+  const todo = insertFullStmt.get(
+    title,
+    description,
+    priority,
+    state,
+    state,
+    owner,
+    scheduled_for,
+    tags
+  ) as Todo | undefined;
   return todo ?? null;
 }
 
@@ -167,6 +212,7 @@ export function updateTodo(
     priority: TodoPriority;
     state: TodoState;
     scheduled_for: string | null;
+    tags: string;
   }
 ) {
   const todo = updateStmt.get(
@@ -176,6 +222,7 @@ export function updateTodo(
     fields.state,
     fields.state,
     fields.scheduled_for,
+    fields.tags,
     id,
     owner
   ) as Todo | undefined;

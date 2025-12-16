@@ -38,6 +38,7 @@ Response:
       "priority": "pebble",
       "state": "new",
       "scheduled_for": "2025-11-28",
+      "tags": "work,events",
       "created_at": "2025-11-13 10:31:26"
     }
   ],
@@ -49,11 +50,102 @@ Response:
       "priority": "sand",
       "state": "in_progress",
       "scheduled_for": null,
+      "tags": "",
       "created_at": "2025-11-13 10:30:58"
     }
   ]
 }
 ```
+
+Note: The `tags` field contains a comma-separated string of tags (e.g., `"work,urgent"`) or an empty string if no tags are assigned.
+
+## Create Tasks
+
+### POST `/ai/tasks`
+Create one or more tasks for a user. Useful for AI agents that analyze existing todos and generate follow-up tasks or project breakdowns.
+
+Body (JSON):
+```json
+{
+  "owner": "npub1abc...",
+  "tasks": [
+    {
+      "title": "Research competitor features",
+      "description": "Look at top 3 competitors and document their key features",
+      "priority": "pebble",
+      "state": "new",
+      "scheduled_for": "2025-12-20",
+      "tags": "research,product"
+    },
+    {
+      "title": "Draft project scope document",
+      "priority": "rock"
+    }
+  ]
+}
+```
+
+Rules:
+- `owner` (required): npub of the user.
+- `tasks` (required): Array of 1–50 task objects.
+- Each task requires `title` (non-empty, max 500 chars).
+- Optional fields with defaults:
+  - `description`: free text (default: `""`)
+  - `priority`: `rock` | `pebble` | `sand` (default: `"sand"`)
+  - `state`: `new` | `ready` | `in_progress` | `done` (default: `"new"`)
+  - `scheduled_for`: `YYYY-MM-DD` or `null` (default: `null`)
+  - `tags`: comma-separated string (default: `""`)
+- Invalid priority/state values are normalized to defaults.
+- Invalid dates are ignored (set to `null`).
+
+Example:
+```bash
+curl -s -X POST 'http://localhost:3000/ai/tasks' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "owner": "npub1abc...",
+    "tasks": [
+      {"title": "Review project requirements", "priority": "rock"},
+      {"title": "Set up development environment", "tags": "setup"}
+    ]
+  }'
+```
+
+Response:
+```json
+{
+  "owner": "npub1abc...",
+  "created_at": "2025-12-16T10:30:00.000Z",
+  "created": [
+    {
+      "id": 42,
+      "title": "Review project requirements",
+      "description": "",
+      "priority": "rock",
+      "state": "new",
+      "scheduled_for": null,
+      "tags": "",
+      "created_at": "2025-12-16 10:30:00"
+    },
+    {
+      "id": 43,
+      "title": "Set up development environment",
+      "description": "",
+      "priority": "sand",
+      "state": "new",
+      "scheduled_for": null,
+      "tags": "setup",
+      "created_at": "2025-12-16 10:30:00"
+    }
+  ],
+  "failed": []
+}
+```
+
+Error handling:
+- Tasks with missing/empty titles are skipped and reported in `failed` array.
+- The `failed` array contains objects with `index`, `title`, and `reason` fields.
+- Partial success is possible: some tasks may be created while others fail.
 
 ## Submit Summaries
 
@@ -119,7 +211,15 @@ Week selection:
 - The API selects the most recent summary whose `summary_date` falls in the current week (Mon–Sun), preferring the latest `updated_at` if multiple exist.
 
 ## Workflow for an Agent
+
+### Summary Agent
 1) Fetch todos: `GET /ai/tasks/7/yes?owner=npub...`
 2) Generate summaries based on scheduled + unscheduled tasks.
 3) Post summaries: `POST /ai/summary` with `summary_date` = today.
 4) (Optional) Verify: `GET /ai/summary/latest?owner=npub...`
+
+### Task Creation Agent
+1) Fetch todos: `GET /ai/tasks/7/yes?owner=npub...`
+2) Analyze existing tasks and identify follow-ups, subtasks, or project breakdowns.
+3) Create new tasks: `POST /ai/tasks` with array of tasks.
+4) (Optional) Verify by fetching todos again.
