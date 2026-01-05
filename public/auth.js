@@ -430,7 +430,8 @@ const completeLogin = async (method, event, bunkerUriForStorage = null) => {
     clearAutoLogin();
   }
 
-  window.location.reload();
+  // Force a full page reload (bypass service worker cache)
+  window.location.href = window.location.pathname + "?t=" + Date.now();
 };
 
 const handleExportSecret = async () => {

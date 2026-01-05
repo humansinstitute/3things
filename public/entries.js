@@ -4,11 +4,11 @@ import { elements as el, hide, show, setText } from "./dom.js";
 import { encryptEntry, decryptEntries } from "./entryCrypto.js";
 import { state } from "./state.js";
 
-// Ordinal prompt labels
+// Warm, reflective prompts
 const PROMPTS = [
-  "What's your first thing?",
-  "What's your second thing?",
-  "What's your third thing?",
+  "What made today good?",
+  "What else are you grateful for?",
+  "One more thing...",
 ];
 
 // State
@@ -16,6 +16,7 @@ let todayEntries = []; // Decrypted entries for today (slots 1-3)
 let historyEntries = []; // Decrypted entries for past days
 let lastHistoryDate = null; // For pagination
 let isLoading = false;
+let editingSlot = null; // Track which slot we're editing (null = adding new)
 
 export async function initEntries() {
   if (!state.session) return;
@@ -31,6 +32,11 @@ export async function initEntries() {
     if (event.key === "Enter" && event.shiftKey) {
       event.preventDefault();
       el.entryForm?.requestSubmit();
+    }
+    // Escape to cancel editing
+    if (event.key === "Escape" && editingSlot !== null) {
+      event.preventDefault();
+      cancelEditing();
     }
   });
 
@@ -48,12 +54,19 @@ function updateTodayDate() {
   const today = new Date();
   const options = { weekday: "long", month: "long", day: "numeric" };
   const formatted = today.toLocaleDateString("en-US", options);
-  setText(el.todayDate, `Today - ${formatted}`);
+  setText(el.todayDate, formatted);
 }
 
 function getTodayDateString() {
-  const today = new Date();
-  return today.toISOString().slice(0, 10); // YYYY-MM-DD
+  return getLocalDateString(new Date());
+}
+
+// Format date as YYYY-MM-DD in local timezone (not UTC)
+function getLocalDateString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 async function loadTodayEntries() {
@@ -82,7 +95,7 @@ async function loadTodayEntries() {
 function renderTodayState() {
   const completedCount = todayEntries.length;
 
-  // Render completed entries
+  // Render completed entries (clickable to edit)
   if (el.completedEntries) {
     if (completedCount === 0) {
       el.completedEntries.innerHTML = "";
@@ -90,7 +103,7 @@ function renderTodayState() {
       const html = todayEntries
         .map(
           (entry, index) => `
-        <div class="completed-entry">
+        <div class="completed-entry" data-edit-slot="${entry.slot}" title="Click to edit">
           <span class="entry-number">${index + 1}.</span>
           <span class="entry-content">${escapeHtml(entry.content)}</span>
         </div>
@@ -98,27 +111,53 @@ function renderTodayState() {
         )
         .join("");
       el.completedEntries.innerHTML = html;
+
+      // Wire up click handlers for editing
+      el.completedEntries.querySelectorAll("[data-edit-slot]").forEach((el) => {
+        el.addEventListener("click", () => {
+          const slot = parseInt(el.dataset.editSlot, 10);
+          startEditingEntry(slot);
+        });
+      });
     }
   }
 
-  // Update form state
-  if (completedCount >= 3) {
-    // All done!
+  // Update form state based on whether we're editing or adding
+  if (editingSlot !== null) {
+    // Editing mode
+    show(el.entryFormContainer);
+    hide(el.todayStatus);
+
+    const entry = todayEntries.find((e) => e.slot === editingSlot);
+    setText(el.entryPrompt, `Editing thing ${editingSlot}...`);
+    setText(el.entryProgress, "");
+
+    if (el.entrySubmit) {
+      el.entrySubmit.textContent = "Save";
+    }
+
+    if (el.entryInput && entry) {
+      el.entryInput.value = entry.content;
+      el.entryInput.focus();
+    }
+  } else if (completedCount >= 3) {
+    // All done for today
     hide(el.entryFormContainer);
     show(el.todayStatus);
-    setText(el.todayStatus, "Done");
+    setText(el.todayStatus, "All three things captured");
   } else {
+    // Adding new entry
     show(el.entryFormContainer);
     hide(el.todayStatus);
 
     // Update prompt and progress
     const nextSlot = completedCount + 1;
     setText(el.entryPrompt, PROMPTS[completedCount] || "Add another thing");
-    setText(el.entryProgress, `Thing ${nextSlot} of 3`);
+    setText(el.entryProgress, `${nextSlot} of 3`);
 
     // Update button text
     if (el.entrySubmit) {
-      el.entrySubmit.textContent = nextSlot === 3 ? "Save" : "Save & Continue";
+      el.entrySubmit.textContent = nextSlot === 3 ? "Finish" : "Continue";
     }
 
     // Clear and focus input
@@ -129,6 +168,16 @@ function renderTodayState() {
   }
 }
 
+function startEditingEntry(slot) {
+  editingSlot = slot;
+  renderTodayState();
+}
+
+function cancelEditing() {
+  editingSlot = null;
+  renderTodayState();
+}
+
 async function handleEntrySubmit(event) {
   event.preventDefault();
   if (!state.session || isLoading) return;
@@ -136,8 +185,9 @@ async function handleEntrySubmit(event) {
   const content = el.entryInput?.value?.trim();
   if (!content) return;
 
-  const nextSlot = todayEntries.length + 1;
-  if (nextSlot > 3) return;
+  // Determine which slot we're saving to
+  const slot = editingSlot !== null ? editingSlot : todayEntries.length + 1;
+  if (slot > 3) return;
 
   isLoading = true;
   if (el.entrySubmit) el.entrySubmit.disabled = true;
@@ -146,25 +196,35 @@ async function handleEntrySubmit(event) {
     // Encrypt the content
     const encryptedContent = await encryptEntry(content);
 
-    // Save to server
+    // Save to server (upsert handles both new and edit)
     const response = await fetch("/entries", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         entry_date: getTodayDateString(),
-        slot: nextSlot,
+        slot,
         encrypted_content: encryptedContent,
       }),
     });
 
     if (!response.ok) throw new Error("Failed to save entry");
 
-    // Add to local state and re-render
-    todayEntries.push({
-      slot: nextSlot,
-      content,
-      decrypted: true,
-    });
+    // Update local state
+    if (editingSlot !== null) {
+      // Editing existing entry
+      const index = todayEntries.findIndex((e) => e.slot === editingSlot);
+      if (index !== -1) {
+        todayEntries[index].content = content;
+      }
+      editingSlot = null;
+    } else {
+      // Adding new entry
+      todayEntries.push({
+        slot,
+        content,
+        decrypted: true,
+      });
+    }
 
     renderTodayState();
   } catch (err) {
@@ -210,7 +270,7 @@ async function loadHistory() {
       hide(el.historyLoadMore);
       if (historyEntries.length === 0) {
         if (el.historyList) {
-          el.historyList.innerHTML = '<p class="history-empty">No past entries yet.</p>';
+          el.historyList.innerHTML = '<p class="history-empty">Your story begins today...</p>';
         }
       }
     }
@@ -269,21 +329,23 @@ function renderHistory() {
     })
     .join("");
 
-  el.historyList.innerHTML = html || '<p class="history-empty">No past entries yet.</p>';
+  el.historyList.innerHTML = html || '<p class="history-empty">Your story begins today...</p>';
 }
 
 function formatHistoryDate(dateStr) {
-  const date = new Date(dateStr + "T12:00:00"); // Use noon to avoid timezone issues
-  const today = new Date();
-  const yesterday = new Date(today);
+  // Parse the YYYY-MM-DD date string
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(year, month - 1, day); // Local date
+
+  const todayStr = getTodayDateString();
+  const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = getLocalDateString(yesterday);
 
-  const dateOnly = (d) => d.toISOString().slice(0, 10);
-
-  if (dateOnly(date) === dateOnly(today)) {
+  if (dateStr === todayStr) {
     return "Today";
   }
-  if (dateOnly(date) === dateOnly(yesterday)) {
+  if (dateStr === yesterdayStr) {
     return "Yesterday";
   }
 

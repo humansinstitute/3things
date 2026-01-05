@@ -1,5 +1,6 @@
 # dependencies
 node_modules/
+.worktrees/
 
 # package managers
 bun.lock
@@ -7,17 +8,72 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
-# runtime files
-*.log
+# database files
 *.sqlite
+*.sqlite3
+*.db
+*.db3
+data/
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# database backups
+*.bak
+*.backup
+*.dump
+*.sql
+backups/
+db-backups/
+
+# runtime/logs
+*.log
+logs/
+*.pid
 
 # build output
 dist/
 build/
+out/
+.next/
+.nuxt/
 
-# environment files
+# environment & secrets
 .env
 .env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+credentials/
+.secrets
+
+# IDE/editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-*
 
 # OS junk
 .DS_Store
+Thumbs.db
+Desktop.ini
+
+# temp files
+tmp/
+temp/
+*.tmp
+*.temp
+.cache/
+
+# test coverage
+coverage/
+.nyc_output/
+
+# local config (user-specific)
+*.local
+config.local.*

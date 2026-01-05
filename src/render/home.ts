@@ -28,7 +28,7 @@ ${renderHead()}
 function renderHead() {
   return `<head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>${APP_NAME}</title>
   <meta name="theme-color" content="#111111" />
   <meta name="application-name" content="${APP_NAME}" />
@@ -60,14 +60,14 @@ function renderHeader(session: Session | null) {
 
 function renderAuth(session: Session | null) {
   return `<section class="auth-panel" data-login-panel ${session ? "hidden" : ""}>
-    <h2>Sign in with Nostr to get started</h2>
-    <p class="auth-description">Record three things you're grateful for each day.</p>
+    <h2>Welcome to your journal</h2>
+    <p class="auth-description">A quiet space to notice the good in each day. Record three things you're grateful for.</p>
     <div class="auth-actions">
-      <button class="auth-option" type="button" data-login-method="ephemeral">Sign Up</button>
+      <button class="auth-option" type="button" data-login-method="ephemeral">Begin Writing, Anon</button>
     </div>
     <details class="auth-advanced">
-      <summary>Advanced options</summary>
-      <p>Use a browser extension or connect to a remote bunker.</p>
+      <summary>Already have a Nostr identity?</summary>
+      <p class="auth-description" style="margin-top: 0.75rem; margin-bottom: 0.75rem; font-size: 0.9rem;">Connect with your browser extension or remote signer.</p>
       <button class="auth-option" type="button" data-login-method="extension">Browser extension</button>
       <form data-bunker-form>
         <input name="bunker" placeholder="nostrconnect://… or name@example.com" autocomplete="off" />
@@ -104,7 +104,7 @@ function renderJournal(session: Session | null) {
             data-entry-input
             name="content"
             rows="4"
-            placeholder="Something you're grateful for..."
+            placeholder="Take a moment to reflect..."
             required
           ></textarea>
           <div class="entry-footer">
@@ -116,7 +116,7 @@ function renderJournal(session: Session | null) {
     </div>
 
     <div class="history-section" data-history-section>
-      <h2 class="history-title">Past Entries</h2>
+      <h2 class="history-title">Looking Back</h2>
       <div class="history-list" data-history-list>
         <p class="history-loading" data-history-loading>Loading...</p>
       </div>
