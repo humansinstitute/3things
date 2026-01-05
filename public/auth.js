@@ -4,7 +4,7 @@ import {
   DEFAULT_RELAYS,
   EPHEMERAL_SECRET_KEY,
 } from "./constants.js";
-import { closeAvatarMenu } from "./avatar.js";
+import { closeAvatarMenu, clearCachedProfile } from "./avatar.js";
 import { elements as el, hide, show } from "./dom.js";
 import {
   buildUnsignedEvent,
@@ -14,9 +14,8 @@ import {
   loadNostrLibs,
   loadQRCodeLib,
 } from "./nostr.js";
-import { fetchSummaries } from "./summary.js";
 import { clearError, showError } from "./ui.js";
-import { setSession, setSummaries, state } from "./state.js";
+import { setSession, state } from "./state.js";
 import {
   initPinModal,
   promptPinForNewSecret,
@@ -42,10 +41,6 @@ export const initAuth = () => {
   wireForms();
   wireMenuButtons();
   wireQrModal();
-
-  if (state.session) {
-    void fetchSummaries();
-  }
 
   void checkFragmentLogin().then(() => {
     if (!state.session) void maybeAutoLogin();
@@ -154,10 +149,10 @@ const wireMenuButtons = () => {
   el.logoutBtn?.addEventListener("click", async () => {
     closeAvatarMenu();
     await fetch("/auth/logout", { method: "POST" });
-    setSummaries({ day: null, week: null });
     setSession(null);
     clearAutoLogin();
     clearAllStoredCredentials();
+    window.location.reload();
   });
 };
 
@@ -403,6 +398,9 @@ const completeLogin = async (method, event, bunkerUriForStorage = null) => {
   const session = await response.json();
   setSession(session);
 
+  // Clear any stale profile cache so we fetch fresh on reload
+  clearCachedProfile(session.pubkey);
+
   if (method === "ephemeral") {
     localStorage.setItem(AUTO_LOGIN_METHOD_KEY, "ephemeral");
     localStorage.setItem(AUTO_LOGIN_PUBKEY_KEY, session.pubkey);
@@ -432,7 +430,6 @@ const completeLogin = async (method, event, bunkerUriForStorage = null) => {
     clearAutoLogin();
   }
 
-  await fetchSummaries();
   window.location.reload();
 };
 

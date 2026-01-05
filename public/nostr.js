@@ -6,6 +6,7 @@ export const loadNostrLibs = async () => {
     window.__NOSTR_LIBS__ = {
       pure: await import(`${base}/pure`),
       nip19: await import(`${base}/nip19`),
+      nip44: await import(`${base}/nip44`),
       nip46: await import(`${base}/nip46`),
     };
   }
@@ -61,5 +62,5 @@ export const buildUnsignedEvent = (method) => ({
     ["app", APP_TAG],
     ["method", method],
   ],
-  content: "Authenticate with Other Stuff To Do",
+  content: "Authenticate with Three Things",
 });

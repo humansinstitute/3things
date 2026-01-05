@@ -12,6 +12,7 @@ import { withErrorHandling } from "./http";
 import { logError } from "./logger";
 import { handleAiTasks, handleAiTasksPost, handleLatestSummary, handleSummaryPost } from "./routes/ai";
 import { createAuthHandlers } from "./routes/auth";
+import { handleGetEntries, handleGetRecentEntries, handleSaveEntry } from "./routes/entries";
 import { handleHome } from "./routes/home";
 import { handleTodoCreate, handleTodoDelete, handleTodoState, handleTodoUpdate } from "./routes/todos";
 import { AuthService } from "./services/auth";
@@ -43,6 +44,8 @@ const server = Bun.serve({
         const aiTasksMatch = pathname.match(/^\/ai\/tasks\/(\d+)(?:\/(yes|no))?$/);
         if (aiTasksMatch) return handleAiTasks(url, aiTasksMatch);
         if (pathname === "/ai/summary/latest") return handleLatestSummary(url);
+        if (pathname === "/entries") return handleGetEntries(url, session);
+        if (pathname === "/entries/recent") return handleGetRecentEntries(url, session);
         if (pathname === "/") return handleHome(url, session);
       }
 
@@ -51,6 +54,7 @@ const server = Bun.serve({
         if (pathname === "/auth/logout") return logout(req);
         if (pathname === "/ai/summary") return handleSummaryPost(req);
         if (pathname === "/ai/tasks") return handleAiTasksPost(req);
+        if (pathname === "/entries") return handleSaveEntry(req, session);
         if (pathname === "/todos") return handleTodoCreate(req, session);
 
         const updateMatch = pathname.match(/^\/todos\/(\d+)\/update$/);

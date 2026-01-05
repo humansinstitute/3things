@@ -6,8 +6,8 @@ export const LOGIN_EVENT_KIND = 27235;
 export const LOGIN_MAX_AGE_SECONDS = 60;
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 export const COOKIE_SECURE = Bun.env.NODE_ENV === "production";
-export const APP_NAME = "Other Stuff To Do";
-export const APP_TAG = "other-stuff-to-do";
+export const APP_NAME = "Three Things";
+export const APP_TAG = "three-things";
 export const PUBLIC_DIR = join(import.meta.dir, "../public");
 
 export const STATIC_FILES = new Map<string, string>([

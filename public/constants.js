@@ -6,4 +6,4 @@ export const EPHEMERAL_SECRET_KEY = "nostr_ephemeral_secret";
 export const ENCRYPTED_SECRET_KEY = "nostr_encrypted_secret";
 export const ENCRYPTED_BUNKER_KEY = "nostr_encrypted_bunker";
 export const PROFILE_CACHE_KEY = "nostr_profile_cache";
-export const APP_TAG = "other-stuff-to-do";
+export const APP_TAG = "three-things";

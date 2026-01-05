@@ -1,32 +1,12 @@
 import { APP_NAME } from "../config";
-import { ALLOWED_STATE_TRANSITIONS, formatPriorityLabel, formatStateLabel } from "../domain/todos";
 
-import type { Todo } from "../db";
-import type { Session, TodoPriority, TodoState } from "../types";
+import type { Session } from "../types";
 
 type RenderArgs = {
-  showArchive: boolean;
   session: Session | null;
-  filterTags?: string[];
-  todos?: Todo[];
 };
 
-type PageState = {
-  archiveHref: string;
-  archiveLabel: string;
-  remainingText: string;
-  tagFilterBar: string;
-  activeTodos: Todo[];
-  doneTodos: Todo[];
-  emptyActiveMessage: string;
-  emptyArchiveMessage: string;
-  showArchive: boolean;
-};
-
-export function renderHomePage({ showArchive, session, filterTags = [], todos = [] }: RenderArgs) {
-  const filteredTodos = filterTodos(todos, filterTags);
-  const pageState = buildPageState(filteredTodos, filterTags, showArchive, session);
-
+export function renderHomePage({ session }: RenderArgs) {
   return `<!doctype html>
 <html lang="en">
 ${renderHead()}
@@ -34,9 +14,7 @@ ${renderHead()}
   <main class="app-shell">
     ${renderHeader(session)}
     ${renderAuth(session)}
-    ${renderHero(session)}
-    ${renderWork(pageState)}
-    ${renderSummaries()}
+    ${renderJournal(session)}
     ${renderQrModal()}
     ${renderPinModal()}
     ${renderProfileModal()}
@@ -83,7 +61,7 @@ function renderHeader(session: Session | null) {
 function renderAuth(session: Session | null) {
   return `<section class="auth-panel" data-login-panel ${session ? "hidden" : ""}>
     <h2>Sign in with Nostr to get started</h2>
-    <p class="auth-description">Start with a quick Ephemeral ID or bring your own signer.</p>
+    <p class="auth-description">Record three things you're grateful for each day.</p>
     <div class="auth-actions">
       <button class="auth-option" type="button" data-login-method="ephemeral">Sign Up</button>
     </div>
@@ -104,50 +82,47 @@ function renderAuth(session: Session | null) {
   </section>`;
 }
 
-function renderHero(session: Session | null) {
-  return `<section class="hero-entry">
-    <form class="todo-form" method="post" action="/todos">
-      <label for="title" class="sr-only">Add a task</label>
-      <div class="hero-input-wrapper">
-        <input class="hero-input" data-hero-input id="title" name="title" placeholder="${session ? "Add something else…" : "Add a task"}" autocomplete="off" autofocus required ${session ? "" : "disabled"} />
+function renderJournal(session: Session | null) {
+  if (!session) {
+    return `<section class="journal" data-journal hidden></section>`;
+  }
+
+  return `<section class="journal" data-journal>
+    <div class="today-section" data-today-section>
+      <div class="today-header">
+        <h2 class="today-date" data-today-date></h2>
+        <span class="today-status" data-today-status hidden></span>
       </div>
-      <p class="hero-hint" data-hero-hint hidden>Sign in above to add tasks.</p>
-    </form>
-  </section>`;
-}
 
-function renderWork(state: PageState) {
-  return `<section class="work">
-    <div class="work-header">
-      <h2>Work</h2>
-      <a class="archive-toggle" href="${state.archiveHref}">${state.archiveLabel}</a>
-    </div>
-    <p class="remaining-summary">${state.remainingText}</p>
-    ${state.tagFilterBar}
-    ${renderTodoList(state.activeTodos, state.emptyActiveMessage)}
-    ${state.showArchive ? renderArchiveSection(state.doneTodos, state.emptyArchiveMessage) : ""}
-  </section>`;
-}
+      <div class="completed-entries" data-completed-entries></div>
 
-function renderSummaries() {
-  return `<section class="summary-panel" data-summary-panel hidden>
-    <div class="section-heading">
-      <h2>Summaries</h2>
-      <span class="summary-meta" data-summary-updated></span>
+      <div class="entry-form-container" data-entry-form-container>
+        <form class="entry-form" data-entry-form>
+          <label class="entry-prompt" data-entry-prompt>What's your first thing?</label>
+          <textarea
+            class="entry-input"
+            data-entry-input
+            name="content"
+            rows="4"
+            placeholder="Something you're grateful for..."
+            required
+          ></textarea>
+          <div class="entry-footer">
+            <span class="entry-progress" data-entry-progress>Thing 1 of 3</span>
+            <button type="submit" class="entry-submit" data-entry-submit>Save & Continue</button>
+          </div>
+        </form>
+      </div>
     </div>
-    <div class="summary-grid">
-      <article class="summary-card" data-summary-day hidden>
-        <h3>Today</h3>
-        <p class="summary-text" data-summary-day-text></p>
-      </article>
-      <article class="summary-card" data-summary-week hidden>
-        <h3>This Week</h3>
-        <p class="summary-text" data-summary-week-text></p>
-      </article>
-      <article class="summary-card summary-suggestions" data-summary-suggestions hidden>
-        <h3>Suggestions</h3>
-        <p class="summary-text" data-summary-suggestions-text></p>
-      </article>
+
+    <div class="history-section" data-history-section>
+      <h2 class="history-title">Past Entries</h2>
+      <div class="history-list" data-history-list>
+        <p class="history-loading" data-history-loading>Loading...</p>
+      </div>
+      <div class="history-load-more" data-history-load-more hidden>
+        <button type="button" data-load-more-btn>Load more</button>
+      </div>
     </div>
   </section>`;
 }
@@ -244,220 +219,7 @@ function renderSessionSeed(session: Session | null) {
   </script>`;
 }
 
-function buildPageState(todos: Todo[], filterTags: string[], showArchive: boolean, session: Session | null): PageState {
-  const activeTodos = todos.filter((t) => t.state !== "done");
-  const doneTodos = todos.filter((t) => t.state === "done");
-  const archiveHref = showArchive ? "/" : "/?archive=1";
-  const archiveLabel = showArchive ? "Hide archive" : `Archive (${doneTodos.length})`;
-  const tagFilterBar = session ? renderTagFilterBar(todos, filterTags, showArchive) : "";
-  const emptyActiveMessage = session ? "No active work. Add something new!" : "Sign in to view your todos.";
-  const emptyArchiveMessage = session ? "Nothing archived yet." : "Sign in to view your archive.";
-  const remainingText = session ? (activeTodos.length === 0 ? "All clear." : `${activeTodos.length} left to go.`) : "";
-
-  return {
-    archiveHref,
-    archiveLabel,
-    remainingText,
-    tagFilterBar,
-    activeTodos,
-    doneTodos,
-    emptyActiveMessage,
-    emptyArchiveMessage,
-    showArchive,
-  };
-}
-
-function filterTodos(allTodos: Todo[], filterTags: string[]) {
-  if (filterTags.length === 0) return allTodos;
-  return allTodos.filter((todo) => {
-    const todoTags = todo.tags ? todo.tags.split(",").map((t) => t.trim().toLowerCase()) : [];
-    return filterTags.some((ft) => todoTags.includes(ft.toLowerCase()));
-  });
-}
-
-function renderTagFilterBar(allTodos: Todo[], activeTags: string[], showArchive: boolean) {
-  const baseUrl = showArchive ? "/?archive=1" : "/";
-  const tags = collectTags(allTodos);
-  if (tags.length === 0) return "";
-
-  const chips = tags
-    .sort()
-    .map((tag) => {
-      const isActive = activeTags.some((t) => t.toLowerCase() === tag.toLowerCase());
-      const nextTags = toggleTag(activeTags, tag, isActive);
-      const href = nextTags.length > 0 ? `${baseUrl}${showArchive ? "&" : "?"}tags=${nextTags.join(",")}` : baseUrl;
-      return `<a href="${href}" class="tag-chip${isActive ? " active" : ""}">${escapeHtml(tag)}</a>`;
-    })
-    .join("");
-
-  const clearLink = activeTags.length > 0 ? `<a href="${baseUrl}" class="clear-filters">Clear filters</a>` : "";
-  return `<div class="tag-filter-bar"><span class="label">Filter by tag:</span>${chips}${clearLink}</div>`;
-}
-
-function toggleTag(activeTags: string[], tag: string, isActive: boolean) {
-  if (isActive) return activeTags.filter((t) => t.toLowerCase() !== tag.toLowerCase());
-  return [...activeTags, tag];
-}
-
-function collectTags(todos: Todo[]) {
-  const allTags = new Set<string>();
-  for (const todo of todos) {
-    if (!todo.tags) continue;
-    todo.tags
-      .split(",")
-      .map((t) => t.trim().toLowerCase())
-      .filter(Boolean)
-      .forEach((t) => allTags.add(t));
-  }
-  return Array.from(allTags);
-}
-
-function renderTodoList(todos: Todo[], emptyMessage: string) {
-  if (todos.length === 0) {
-    return `<ul class="todo-list"><li>${emptyMessage}</li></ul>`;
-  }
-  return `<ul class="todo-list">${todos.map(renderTodoItem).join("")}</ul>`;
-}
-
-function renderArchiveSection(todos: Todo[], emptyMessage: string) {
-  return `
-    <section class="archive-section">
-      <div class="section-heading"><h2>Archive</h2></div>
-      ${renderTodoList(todos, emptyMessage)}
-    </section>`;
-}
-
 function formatAvatarFallback(npub: string) {
   if (!npub) return "•••";
   return npub.replace(/^npub1/, "").slice(0, 2).toUpperCase();
-}
-
-function renderTodoItem(todo: Todo) {
-  const description = todo.description ? `<p class="todo-description">${escapeHtml(todo.description)}</p>` : "";
-  const scheduled = todo.scheduled_for
-    ? `<p class="todo-description"><strong>Scheduled for:</strong> ${escapeHtml(todo.scheduled_for)}</p>`
-    : "";
-  const tagsDisplay = renderTagsDisplay(todo.tags);
-  return `
-    <li>
-      <details>
-        <summary>
-          <span class="todo-title">${escapeHtml(todo.title)}</span>
-          <span class="badges">
-            <span class="badge priority-${todo.priority}">${formatPriorityLabel(todo.priority)}</span>
-            <span class="badge state-${todo.state}">${formatStateLabel(todo.state)}</span>
-            ${tagsDisplay}
-          </span>
-        </summary>
-        <div class="todo-body">
-          ${description}
-          ${scheduled}
-          <form class="edit-form" method="post" action="/todos/${todo.id}/update">
-            <label>Title
-              <input name="title" value="${escapeHtml(todo.title)}" required />
-            </label>
-            <label>Description
-              <textarea name="description" rows="3">${escapeHtml(todo.description ?? "")}</textarea>
-            </label>
-            <label>Priority
-              <select name="priority">
-                ${renderPriorityOption("rock", todo.priority)}
-                ${renderPriorityOption("pebble", todo.priority)}
-                ${renderPriorityOption("sand", todo.priority)}
-              </select>
-            </label>
-            <label>State
-              <select name="state">
-                ${renderStateOption("new", todo.state)}
-                ${renderStateOption("ready", todo.state)}
-                ${renderStateOption("in_progress", todo.state)}
-                ${renderStateOption("done", todo.state)}
-              </select>
-            </label>
-            <label>Scheduled For
-              <input type="date" name="scheduled_for" value="${todo.scheduled_for ? escapeHtml(todo.scheduled_for) : ""}" />
-            </label>
-            ${renderTagsInput(todo.tags)}
-            <button type="submit">Update</button>
-          </form>
-          ${renderLifecycleActions(todo)}
-        </div>
-      </details>
-    </li>`;
-}
-
-function renderLifecycleActions(todo: Todo) {
-  const transitions = ALLOWED_STATE_TRANSITIONS[todo.state] ?? [];
-  const transitionForms = transitions.map((next) =>
-    renderStateActionForm(todo.id, next, formatTransitionLabel(todo.state, next))
-  );
-
-  return `
-    <div class="todo-actions">
-      ${transitionForms.join("")}
-      ${renderDeleteForm(todo.id)}
-    </div>`;
-}
-
-function formatTransitionLabel(current: TodoState, next: TodoState) {
-  if (current === "done" && next === "ready") return "Reopen";
-  if (current === "ready" && next === "in_progress") return "Start Work";
-  if (next === "done") return "Complete";
-  if (next === "ready") return "Mark Ready";
-  return formatStateLabel(next);
-}
-
-function renderStateActionForm(id: number, nextState: TodoState, label: string) {
-  return `
-    <form method="post" action="/todos/${id}/state">
-      <input type="hidden" name="state" value="${nextState}" />
-      <button type="submit">${label}</button>
-    </form>`;
-}
-
-function renderDeleteForm(id: number) {
-  return `
-    <form method="post" action="/todos/${id}/delete">
-      <button type="submit">Delete</button>
-    </form>`;
-}
-
-function renderPriorityOption(value: TodoPriority, current: string) {
-  const isSelected = value === current ? "selected" : "";
-  return `<option value="${value}" ${isSelected}>${formatPriorityLabel(value)}</option>`;
-}
-
-function renderStateOption(value: TodoState, current: string) {
-  const isSelected = value === current ? "selected" : "";
-  return `<option value="${value}" ${isSelected}>${formatStateLabel(value)}</option>`;
-}
-
-function renderTagsDisplay(tags: string) {
-  if (!tags) return "";
-  const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
-  if (tagList.length === 0) return "";
-  return `<span class="tags-display">${tagList.map((t) => `<span class="tag-chip">${escapeHtml(t)}</span>`).join("")}</span>`;
-}
-
-function renderTagsInput(tags: string) {
-  const tagList = tags ? tags.split(",").map((t) => t.trim()).filter(Boolean) : [];
-  const chips = tagList
-    .map((t) => `<span class="tag-chip" data-tag="${escapeHtml(t)}">${escapeHtml(t)}<span class="remove-tag">&times;</span></span>`)
-    .join("");
-  return `
-    <label>Tags
-      <div class="tag-input-wrapper">
-        ${chips}
-        <input type="text" placeholder="Type and press comma..." />
-        <input type="hidden" name="tags" value="${escapeHtml(tags)}" />
-      </div>
-    </label>`;
-}
-
-function escapeHtml(input: string) {
-  return input
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }

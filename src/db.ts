@@ -27,6 +27,16 @@ export type Summary = {
   updated_at: string;
 };
 
+export type Entry = {
+  id: number;
+  owner: string;
+  entry_date: string;
+  slot: number;
+  encrypted_content: string;
+  created_at: string;
+  updated_at: string;
+};
+
 const db = new Database(Bun.env.DB_PATH || "do-the-other-stuff.sqlite");
 
 db.run(`
@@ -67,6 +77,19 @@ db.run(`
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(owner, summary_date)
+  )
+`);
+
+db.run(`
+  CREATE TABLE IF NOT EXISTS entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner TEXT NOT NULL,
+    entry_date TEXT NOT NULL,
+    slot INTEGER NOT NULL,
+    encrypted_content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(owner, entry_date, slot)
   )
 `);
 
@@ -264,5 +287,64 @@ export function getLatestSummaries(owner: string, today: string, weekStart: stri
 export function resetDatabase() {
   db.run("DELETE FROM todos");
   db.run("DELETE FROM ai_summaries");
-  db.run("DELETE FROM sqlite_sequence WHERE name IN ('todos', 'ai_summaries')");
+  db.run("DELETE FROM entries");
+  db.run("DELETE FROM sqlite_sequence WHERE name IN ('todos', 'ai_summaries', 'entries')");
+}
+
+// Entry prepared statements
+const getEntriesForDateStmt = db.query<Entry>(
+  `SELECT * FROM entries
+   WHERE owner = ? AND entry_date = ?
+   ORDER BY slot ASC`
+);
+
+const getRecentEntriesStmt = db.query<Entry>(
+  `SELECT * FROM entries
+   WHERE owner = ? AND entry_date < ?
+   ORDER BY entry_date DESC, slot ASC
+   LIMIT ?`
+);
+
+const getEntryDatesStmt = db.query<{ entry_date: string; count: number }>(
+  `SELECT entry_date, COUNT(*) as count FROM entries
+   WHERE owner = ?
+   GROUP BY entry_date
+   ORDER BY entry_date DESC
+   LIMIT ?`
+);
+
+const upsertEntryStmt = db.query<Entry>(
+  `INSERT INTO entries (owner, entry_date, slot, encrypted_content)
+   VALUES (?, ?, ?, ?)
+   ON CONFLICT(owner, entry_date, slot) DO UPDATE SET
+     encrypted_content = excluded.encrypted_content,
+     updated_at = CURRENT_TIMESTAMP
+   RETURNING *`
+);
+
+// Entry functions
+export function getEntriesForDate(owner: string, date: string): Entry[] {
+  if (!owner || !date) return [];
+  return getEntriesForDateStmt.all(owner, date);
+}
+
+export function getRecentEntries(owner: string, beforeDate: string, limit: number = 30): Entry[] {
+  if (!owner) return [];
+  return getRecentEntriesStmt.all(owner, beforeDate, limit);
+}
+
+export function getEntryDates(owner: string, limit: number = 30): { entry_date: string; count: number }[] {
+  if (!owner) return [];
+  return getEntryDatesStmt.all(owner, limit);
+}
+
+export function upsertEntry(
+  owner: string,
+  entryDate: string,
+  slot: number,
+  encryptedContent: string
+): Entry | null {
+  if (!owner || !entryDate || slot < 1 || slot > 3 || !encryptedContent) return null;
+  const entry = upsertEntryStmt.get(owner, entryDate, slot, encryptedContent) as Entry | undefined;
+  return entry ?? null;
 }

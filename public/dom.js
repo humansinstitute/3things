@@ -4,20 +4,10 @@ export const elements = {
   errorTarget: document.querySelector("[data-login-error]"),
   logoutBtn: document.querySelector("[data-logout]"),
   copyIdBtn: document.querySelector("[data-copy-id]"),
-  heroInput: document.querySelector("[data-hero-input]"),
-  heroHint: document.querySelector("[data-hero-hint]"),
   avatarButton: document.querySelector("[data-avatar]"),
   avatarImg: document.querySelector("[data-avatar-img]"),
   avatarFallback: document.querySelector("[data-avatar-fallback]"),
   avatarMenu: document.querySelector("[data-avatar-menu]"),
-  summaryPanel: document.querySelector("[data-summary-panel]"),
-  summaryUpdated: document.querySelector("[data-summary-updated]"),
-  summaryDay: document.querySelector("[data-summary-day]"),
-  summaryDayText: document.querySelector("[data-summary-day-text]"),
-  summaryWeek: document.querySelector("[data-summary-week]"),
-  summaryWeekText: document.querySelector("[data-summary-week-text]"),
-  summarySuggestions: document.querySelector("[data-summary-suggestions]"),
-  summarySuggestionsText: document.querySelector("[data-summary-suggestions-text]"),
   qrModal: document.querySelector("[data-qr-modal]"),
   qrCloseBtn: document.querySelector("[data-qr-close]"),
   qrContainer: document.querySelector("[data-qr-container]"),
@@ -49,14 +39,27 @@ export const elements = {
   profileEditPicture: document.querySelector("[data-profile-edit-picture]"),
   profileEditStatus: document.querySelector("[data-profile-edit-status]"),
   profileEditCancel: document.querySelector("[data-profile-edit-cancel]"),
+  // Journal elements
+  journal: document.querySelector("[data-journal]"),
+  todaySection: document.querySelector("[data-today-section]"),
+  todayDate: document.querySelector("[data-today-date]"),
+  todayStatus: document.querySelector("[data-today-status]"),
+  completedEntries: document.querySelector("[data-completed-entries]"),
+  entryFormContainer: document.querySelector("[data-entry-form-container]"),
+  entryForm: document.querySelector("[data-entry-form]"),
+  entryPrompt: document.querySelector("[data-entry-prompt]"),
+  entryInput: document.querySelector("[data-entry-input]"),
+  entryProgress: document.querySelector("[data-entry-progress]"),
+  entrySubmit: document.querySelector("[data-entry-submit]"),
+  historySection: document.querySelector("[data-history-section]"),
+  historyList: document.querySelector("[data-history-list]"),
+  historyLoading: document.querySelector("[data-history-loading]"),
+  historyLoadMore: document.querySelector("[data-history-load-more]"),
+  loadMoreBtn: document.querySelector("[data-load-more-btn]"),
 };
 
 export const show = (el) => el?.removeAttribute("hidden");
 export const hide = (el) => el?.setAttribute("hidden", "hidden");
 export const setText = (el, text) => {
   if (el) el.textContent = text;
-};
-export const focusHeroInput = () => {
-  const input = document.getElementById("title");
-  if (input) input.focus();
 };

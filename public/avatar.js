@@ -133,14 +133,25 @@ function handleAvatarOutside(event) {
   closeAvatarMenu();
 }
 
+// Clear cached profile for a pubkey (forces refresh on next fetch)
+export function clearCachedProfile(pubkey) {
+  if (pubkey) {
+    profileCache.delete(pubkey);
+    saveProfileCache();
+  }
+}
+
 // Fetch and cache a profile, returns the profile object
-export async function fetchProfile(pubkey) {
+export async function fetchProfile(pubkey, forceRefresh = false) {
   if (!pubkey) return null;
 
-  // Check cache first (with 1 hour expiry)
+  // Check cache first (with 1 hour expiry) - skip if forcing refresh
   const cached = profileCache.get(pubkey);
-  if (cached && cached.fetchedAt && Date.now() - cached.fetchedAt < 3600000) {
-    return cached;
+  if (!forceRefresh && cached && cached.fetchedAt && Date.now() - cached.fetchedAt < 3600000) {
+    // Only use cache if it has real profile data (not just fallback)
+    if (cached.name || cached.displayName || cached.nip05) {
+      return cached;
+    }
   }
 
   const fallbackPicture = fallbackAvatarUrl(pubkey);
@@ -153,12 +164,13 @@ export async function fetchProfile(pubkey) {
 
     const observable = profilePool
       .subscription(DEFAULT_RELAYS, [{ authors: [pubkey], kinds: [0], limit: 1 }])
-      .pipe(onlyEvents(), take(1), takeUntil(timer(5000)));
+      .pipe(onlyEvents(), take(1), takeUntil(timer(8000)));
 
     const event = await firstValueFrom(observable, { defaultValue: null });
 
     if (!event) {
-      const profile = { pubkey, picture: fallbackPicture, fetchedAt: Date.now() };
+      // Don't cache fallback-only profiles for long - retry sooner
+      const profile = { pubkey, picture: fallbackPicture, fetchedAt: Date.now() - 3300000 }; // 5 min cache
       profileCache.set(pubkey, profile);
       saveProfileCache();
       return profile;
@@ -186,8 +198,10 @@ export async function fetchProfile(pubkey) {
     profileCache.set(pubkey, profile);
     saveProfileCache();
     return profile;
-  } catch (_error) {
-    const profile = { pubkey, picture: fallbackPicture, fetchedAt: Date.now() };
+  } catch (error) {
+    console.warn("Profile fetch error:", error);
+    // Don't cache errors for long
+    const profile = { pubkey, picture: fallbackPicture, fetchedAt: Date.now() - 3300000 };
     profileCache.set(pubkey, profile);
     saveProfileCache();
     return profile;
@@ -211,8 +225,8 @@ async function openProfileModal() {
   if (el.profileNpub) el.profileNpub.textContent = state.session.npub;
   if (el.profileAvatar) el.profileAvatar.innerHTML = "";
 
-  // Fetch and display profile
-  const profile = await fetchProfile(state.session.pubkey);
+  // Fetch and display profile (force refresh to get latest)
+  const profile = await fetchProfile(state.session.pubkey, true);
 
   if (el.profileName) {
     el.profileName.textContent = profile?.displayName || profile?.name || formatNpubShort(state.session.npub);
