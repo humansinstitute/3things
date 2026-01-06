@@ -15,6 +15,9 @@ import {
 import { bytesToHex, hexToBytes } from "./nostr.js";
 
 const PIN_LENGTH = 6;
+const SESSION_SECRET_KEY = "nostr_session_secret";
+const SESSION_BUNKER_URI_KEY = "nostr_session_bunker_uri";
+
 let currentPin = "";
 let pinResolve = null;
 let pinReject = null;
@@ -24,12 +27,63 @@ let pendingSecretHex = null;
 let pendingBunkerUri = null;
 let decryptMode = null; // "secret" or "bunker"
 
-// In-memory secret storage (cleared on page unload)
+// In-memory secret storage (survives page refresh via sessionStorage)
 let memorySecret = null;
 
 // In-memory bunker signer (kept alive for signing)
 let memoryBunkerSigner = null;
 let memoryBunkerUri = null;
+
+// Restore from sessionStorage on module load
+function restoreFromSession() {
+  try {
+    const storedSecret = sessionStorage.getItem(SESSION_SECRET_KEY);
+    if (storedSecret) {
+      // Convert hex back to Uint8Array
+      const bytes = new Uint8Array(storedSecret.length / 2);
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(storedSecret.substr(i * 2, 2), 16);
+      }
+      memorySecret = bytes;
+    }
+    const storedBunkerUri = sessionStorage.getItem(SESSION_BUNKER_URI_KEY);
+    if (storedBunkerUri) {
+      memoryBunkerUri = storedBunkerUri;
+    }
+  } catch (err) {
+    console.warn("Failed to restore from sessionStorage:", err);
+  }
+}
+
+// Save to sessionStorage for persistence across refreshes
+function saveSecretToSession(secretBytes) {
+  try {
+    const hex = Array.from(secretBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+    sessionStorage.setItem(SESSION_SECRET_KEY, hex);
+  } catch (err) {
+    console.warn("Failed to save to sessionStorage:", err);
+  }
+}
+
+function saveBunkerUriToSession(uri) {
+  try {
+    sessionStorage.setItem(SESSION_BUNKER_URI_KEY, uri);
+  } catch (err) {
+    console.warn("Failed to save bunker URI to sessionStorage:", err);
+  }
+}
+
+function clearSessionStorage() {
+  try {
+    sessionStorage.removeItem(SESSION_SECRET_KEY);
+    sessionStorage.removeItem(SESSION_BUNKER_URI_KEY);
+  } catch (err) {
+    // Ignore
+  }
+}
+
+// Restore on module initialization
+restoreFromSession();
 
 export const initPinModal = () => {
   // Wire up keypad buttons
@@ -148,6 +202,7 @@ async function handlePinComplete() {
           const encrypted = await encryptWithPin(pendingSecretHex, currentPin);
           storeEncryptedSecret(encrypted);
           memorySecret = hexToBytes(pendingSecretHex);
+          saveSecretToSession(memorySecret);
           closePinModal();
           if (pinResolve) {
             pinResolve(memorySecret);
@@ -159,6 +214,7 @@ async function handlePinComplete() {
           const encrypted = await encryptWithPin(pendingBunkerUri, currentPin);
           storeEncryptedBunker(encrypted);
           memoryBunkerUri = pendingBunkerUri;
+          saveBunkerUriToSession(memoryBunkerUri);
           closePinModal();
           if (pinResolve) {
             pinResolve(pendingBunkerUri);
@@ -200,6 +256,7 @@ async function handlePinComplete() {
       }
       const decrypted = await decryptWithPin(encrypted, currentPin);
       memoryBunkerUri = decrypted;
+      saveBunkerUriToSession(decrypted);
       closePinModal();
       if (pinResolve) {
         pinResolve(decrypted);
@@ -220,6 +277,7 @@ async function handlePinComplete() {
       }
       const decrypted = await decryptWithPin(encrypted, currentPin);
       memorySecret = hexToBytes(decrypted);
+      saveSecretToSession(memorySecret);
       closePinModal();
       if (pinResolve) {
         pinResolve(memorySecret);
@@ -341,11 +399,19 @@ export function getMemorySecret() {
 // Set the in-memory secret directly (for ephemeral login)
 export function setMemorySecret(secret) {
   memorySecret = secret;
+  if (secret) {
+    saveSecretToSession(secret);
+  }
 }
 
 // Clear the in-memory secret
 export function clearMemorySecret() {
   memorySecret = null;
+  try {
+    sessionStorage.removeItem(SESSION_SECRET_KEY);
+  } catch (_err) {
+    // Ignore
+  }
 }
 
 // Get the in-memory bunker signer (if available)
@@ -366,6 +432,9 @@ export function getMemoryBunkerUri() {
 // Set the in-memory bunker URI
 export function setMemoryBunkerUri(uri) {
   memoryBunkerUri = uri;
+  if (uri) {
+    saveBunkerUriToSession(uri);
+  }
 }
 
 // Clear the in-memory bunker signer
@@ -379,6 +448,11 @@ export function clearMemoryBunker() {
   }
   memoryBunkerSigner = null;
   memoryBunkerUri = null;
+  try {
+    sessionStorage.removeItem(SESSION_BUNKER_URI_KEY);
+  } catch (_err) {
+    // Ignore
+  }
 }
 
 // Check if there's an encrypted secret stored
@@ -403,4 +477,5 @@ export function clearStoredBunker() {
 export function clearAllStoredCredentials() {
   clearStoredSecret();
   clearStoredBunker();
+  clearSessionStorage();
 }

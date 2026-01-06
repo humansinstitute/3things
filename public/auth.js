@@ -5,8 +5,9 @@ import {
   EPHEMERAL_SECRET_KEY,
   getRelays,
 } from "./constants.js";
-import { closeAvatarMenu, clearCachedProfile } from "./avatar.js";
+import { closeAvatarMenu, clearCachedProfile, updateAvatar } from "./avatar.js";
 import { elements as el, hide, show } from "./dom.js";
+import { initEntries } from "./entries.js";
 import {
   buildUnsignedEvent,
   bytesToHex,
@@ -805,8 +806,18 @@ const completeLogin = async (method, event, bunkerUriForStorage = null) => {
     clearAutoLogin();
   }
 
-  // Force a full page reload (bypass service worker cache)
-  window.location.href = window.location.pathname + "?t=" + Date.now();
+  // Soft transition: show journal UI and initialize entries without page reload
+  // This preserves memorySecret/memoryBunkerSigner so we don't need to re-prompt for PIN
+  hide(el.loginPanel);
+  show(el.journal);
+  show(el.sessionControls);
+  show(el.avatarButton);
+
+  // Update avatar with the new session
+  await updateAvatar();
+
+  // Initialize entries (will decrypt using memorySecret already in memory)
+  await initEntries();
 };
 
 const handleExportSecret = async () => {

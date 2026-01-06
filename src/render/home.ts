@@ -85,11 +85,9 @@ function renderAuth(session: Session | null) {
 }
 
 function renderJournal(session: Session | null) {
-  if (!session) {
-    return `<section class="journal" data-journal hidden></section>`;
-  }
-
-  return `<section class="journal" data-journal>
+  // Always render full journal HTML (hidden when not logged in)
+  // This allows soft login transitions without page reload
+  return `<section class="journal" data-journal ${session ? "" : "hidden"}>
     <div class="today-section" data-today-section>
       <div class="today-header">
         <h2 class="today-date" data-today-date></h2>
