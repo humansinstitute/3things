@@ -8,6 +8,7 @@ export const loadNostrLibs = async () => {
       nip19: await import(`${base}/nip19`),
       nip44: await import(`${base}/nip44`),
       nip46: await import(`${base}/nip46`),
+      pool: await import(`${base}/pool`),
     };
   }
   return window.__NOSTR_LIBS__;

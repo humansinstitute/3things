@@ -1244,3 +1244,125 @@ details summary {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* Nostr Connect Button */
+.auth-nostr-connect {
+  background: #f97316 !important;
+  color: #fff !important;
+  border-color: #f97316 !important;
+}
+.auth-nostr-connect:hover:not(:disabled) {
+  background: #ea580c !important;
+  border-color: #ea580c !important;
+}
+
+/* Nostr Connect Modal */
+.nostr-connect-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+}
+.nostr-connect-overlay[hidden] {
+  display: none;
+}
+.nostr-connect-modal {
+  background: #fff;
+  border-radius: 20px;
+  padding: 2rem;
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+  position: relative;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+.nostr-connect-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #666;
+  padding: 0.25rem;
+  line-height: 1;
+}
+.nostr-connect-close:hover {
+  color: #111;
+}
+.nostr-connect-modal h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+}
+.nostr-connect-modal > p {
+  margin: 0 0 1.25rem;
+  color: #555;
+  font-size: 0.9rem;
+}
+.nostr-connect-qr {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1.25rem;
+}
+.nostr-connect-qr canvas {
+  border-radius: 8px;
+}
+.nostr-connect-uri-wrapper {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.nostr-connect-uri {
+  flex: 1;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.8rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #f5f5f5;
+  font-family: monospace;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.nostr-connect-copy {
+  padding: 0.6rem 1rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 150ms ease;
+}
+.nostr-connect-copy:hover {
+  background: var(--accent-light);
+}
+.nostr-connect-status {
+  margin: 0 0 0.5rem;
+  color: #666;
+  font-size: 0.9rem;
+}
+.nostr-connect-timer {
+  margin: 0 0 1rem;
+  color: #f97316;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.nostr-connect-cancel {
+  padding: 0.7rem 1.5rem;
+  background: transparent;
+  color: #666;
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 150ms ease;
+}
+.nostr-connect-cancel:hover {
+  background: #f5f5f5;
+  border-color: #ccc;
+}

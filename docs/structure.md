@@ -1,31 +1,96 @@
 # Code Structure
 
-Overview of the current layout so you can find the right place for changes quickly.
+Overview of the Three Things codebase layout.
 
-## Layout
-- `src/server.ts`: Bun entry point; wires routes, serves static assets from `public/`, and delegates to renderers.
-- `src/config.ts`: Central constants (port, app name, cookie names, timeouts, paths).
-- `src/http.ts`: Response helpers (`jsonResponse`, `redirect`, `withErrorHandling`, cookie parsing/serialization).
-- `src/logger.ts`: Small logging helpers.
-- `src/types.ts`: Shared primitives for sessions and todo enums.
-- `src/domain/`: Domain helpers/constants (`todos.ts` for state/priorities/transitions).
-- `src/utils/`: Generic helpers (dates, HTML escaping).
-- `src/services/`: Business logic. `auth.ts` handles session validation/creation; `todos.ts` handles todo mutations/listing/summaries.
-- `src/routes/`: Route handlers grouped by feature (`auth.ts`, `ai.ts`, `home.ts`, `todos.ts`).
-- `src/render/home.ts`: Server-rendered HTML template for the app shell.
-- `src/static.ts`: Static asset responder (maps known files + falls back to `public/`).
-- `public/`: Static assets, including `app.css` (styles), `app.js` (entry), and feature modules (`auth.js`, `avatar.js`, `ui.js`, etc).
-- `tests/`: Bun tests covering auth and todo flows.
+## Server (`src/`)
+
+| File | Purpose |
+| ---- | ------- |
+| `server.ts` | Bun entry point; wires routes, serves static assets from `public/` |
+| `config.ts` | Central constants (port, app name, cookie names, paths) |
+| `db.ts` | SQLite database setup, schema, and query functions for entries |
+| `http.ts` | Response helpers (`jsonResponse`, `redirect`, cookie parsing) |
+| `types.ts` | Shared TypeScript types for sessions |
+
+### Routes (`src/routes/`)
+
+| File | Purpose |
+| ---- | ------- |
+| `auth.ts` | Login/logout handlers, session management |
+| `entries.ts` | Journal entry CRUD (get, save encrypted entries) |
+| `home.ts` | Home page route handler |
+
+### Render (`src/render/`)
+
+| File | Purpose |
+| ---- | ------- |
+| `home.ts` | Server-rendered HTML template for the app shell |
+
+## Client (`public/`)
+
+### Core Modules
+
+| File | Purpose |
+| ---- | ------- |
+| `app.js` | Entry point; initializes all modules |
+| `app.css` | All styles (warm diary theme, responsive layout) |
+| `state.js` | Client state management (`session`) |
+| `dom.js` | DOM element references |
+| `ui.js` | UI helpers (show/hide panels, error display) |
+
+### Authentication
+
+| File | Purpose |
+| ---- | ------- |
+| `auth.js` | Login flow, auto-login, logout |
+| `pin.js` | PIN modal for encrypting/decrypting secrets |
+| `nostr.js` | Nostr library loading and helpers |
+| `crypto.js` | Cryptographic utilities |
+
+### Journal Features
+
+| File | Purpose |
+| ---- | ------- |
+| `entries.js` | Entry management (load, save, render today/history) |
+| `entryCrypto.js` | NIP-44 encryption/decryption for entries |
+
+### Profile & Avatar
+
+| File | Purpose |
+| ---- | ------- |
+| `avatar.js` | Avatar display, profile modal, profile editing |
+
+### PWA Features
+
+| File | Purpose |
+| ---- | ------- |
+| `sw.js` | Service worker (caching external libs, images) |
+| `pullRefresh.js` | Pull-to-refresh for mobile |
+| `manifest.webmanifest` | PWA manifest |
+| `constants.js` | Client-side constants |
 
 ## Patterns
-- **Thin server**: `src/server.ts` only wires routes; handlers live in `src/routes/*` and delegate to services/validation.
-- **Pure helpers**: Domain helpers enforce allowed transitions; validation normalizes inputs before hitting services.
-- **Rendering**: HTML lives in `src/render/home.ts`; styles live in `public/app.css`; inline `<script>` only seeds `window.__NOSTR_SESSION__`.
-- **Client script**: `public/app.js` bootstraps small modules (state, auth, avatar, UI, tag inputs). Client state mutations should use the helpers in `public/state.js` so `onRefresh` listeners fire.
 
-## When adding features
-- Add business logic to `src/services/*`.
-- Add validation rules to `src/validation.ts`.
-- Add routes/handlers under `src/routes/*` and wire them in `src/server.ts`.
-- Update server-rendered markup in `src/render/home.ts` and styles in `public/app.css`.
-- Update UI behavior in the appropriate client module (e.g., `public/ui.js`, `public/auth.js`) and call state helpers as needed.
+### Server
+- **Thin handlers**: Routes delegate to db functions, minimal business logic
+- **Session in memory**: Sessions stored in Map, not database
+- **Static serving**: `public/` served directly by Bun
+
+### Client
+- **ES Modules**: All JS uses native ES modules
+- **State pattern**: `state.js` holds session; modules import as needed
+- **Lazy loading**: Nostr libraries loaded on-demand from esm.sh
+- **Encryption first**: Content encrypted before leaving browser
+
+### Rendering
+- **Server-side HTML**: Initial page rendered by `src/render/home.ts`
+- **Client hydration**: `app.js` bootstraps modules after page load
+- **Session seed**: `window.__NOSTR_SESSION__` set inline for initial state
+
+## When Adding Features
+
+1. **Database changes**: Update schema and queries in `src/db.ts`
+2. **New endpoints**: Add route handler in `src/routes/`, wire in `src/server.ts`
+3. **UI changes**: Update `src/render/home.ts` for markup, `public/app.css` for styles
+4. **Client behavior**: Add/update module in `public/`, import in `app.js`
+5. **Service worker**: Bump `CACHE_NAME` version, add new files to `LOCAL_ASSETS`

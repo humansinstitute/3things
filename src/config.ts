@@ -10,6 +10,16 @@ export const APP_NAME = "Three Things";
 export const APP_TAG = "three-things";
 export const PUBLIC_DIR = join(import.meta.dir, "../public");
 
+export const DEFAULT_RELAYS = [
+  "wss://relay.damus.io",
+  "wss://nos.lol",
+  "wss://relay.devvul.com",
+  "wss://purplepag.es",
+];
+export const NOSTR_RELAYS: string[] = Bun.env.NOSTR_RELAYS
+  ? Bun.env.NOSTR_RELAYS.split(",").map((s) => s.trim()).filter(Boolean)
+  : DEFAULT_RELAYS;
+
 export const STATIC_FILES = new Map<string, string>([
   ["/favicon.ico", "favicon.png"],
   ["/favicon.png", "favicon.png"],

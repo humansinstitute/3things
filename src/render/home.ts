@@ -1,4 +1,4 @@
-import { APP_NAME } from "../config";
+import { APP_NAME, NOSTR_RELAYS } from "../config";
 
 import type { Session } from "../types";
 
@@ -16,6 +16,7 @@ ${renderHead()}
     ${renderAuth(session)}
     ${renderJournal(session)}
     ${renderQrModal()}
+    ${renderNostrConnectModal()}
     ${renderPinModal()}
     ${renderProfileModal()}
   </main>
@@ -69,6 +70,7 @@ function renderAuth(session: Session | null) {
       <summary>Already have a Nostr identity?</summary>
       <p class="auth-description" style="margin-top: 0.75rem; margin-bottom: 0.75rem; font-size: 0.9rem;">Connect with your browser extension or remote signer.</p>
       <button class="auth-option" type="button" data-login-method="extension">Browser extension</button>
+      <button class="auth-option auth-nostr-connect" type="button" data-nostr-connect-btn>Nostr Connect (Mobile Signer)</button>
       <form data-bunker-form>
         <input name="bunker" placeholder="nostrconnect://… or name@example.com" autocomplete="off" />
         <button class="bunker-submit" type="submit">Connect bunker</button>
@@ -134,6 +136,24 @@ function renderQrModal() {
       <h2>Login QR Code</h2>
       <p>Scan this code with your mobile device to log in</p>
       <div class="qr-canvas-container" data-qr-container></div>
+    </div>
+  </div>`;
+}
+
+function renderNostrConnectModal() {
+  return `<div class="nostr-connect-overlay" data-nostr-connect-modal hidden>
+    <div class="nostr-connect-modal">
+      <button class="nostr-connect-close" type="button" data-nostr-connect-close aria-label="Close">&times;</button>
+      <h2>Connect with Mobile Signer</h2>
+      <p>Scan this QR code with Amber, Nostrsigner, or another NIP-46 signer app</p>
+      <div class="nostr-connect-qr" data-nostr-connect-qr></div>
+      <div class="nostr-connect-uri-wrapper">
+        <input type="text" class="nostr-connect-uri" data-nostr-connect-uri readonly />
+        <button type="button" class="nostr-connect-copy" data-nostr-connect-copy>Copy</button>
+      </div>
+      <p class="nostr-connect-status" data-nostr-connect-status>Waiting for connection...</p>
+      <p class="nostr-connect-timer" data-nostr-connect-timer></p>
+      <button type="button" class="nostr-connect-cancel" data-nostr-connect-cancel>Cancel</button>
     </div>
   </div>`;
 }
@@ -216,6 +236,9 @@ function renderProfileModal() {
 function renderSessionSeed(session: Session | null) {
   return `<script>
     window.__NOSTR_SESSION__ = ${JSON.stringify(session ?? null)};
+    window.__NOSTR_RELAYS__ = ${JSON.stringify(NOSTR_RELAYS)};
+    window.__APP_NAME__ = ${JSON.stringify(APP_NAME)};
+    window.__APP_FAVICON__ = "/favicon.png";
   </script>`;
 }
 

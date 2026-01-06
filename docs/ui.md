@@ -1,59 +1,157 @@
 # UI Guide
 
-How the UI is structured, how data refreshes, and how to adjust styles quickly.
+How the Three Things journal UI is structured and styled.
 
-## Structure
-- Single HTML page rendered server-side in `src/render/home.ts`, served by `src/server.ts`.
-- Styles live in `public/app.css`; markup is plain HTML; a tiny inline `<script>` only sets `window.__NOSTR_SESSION__`.
-- Primary sections:
-  - Header (title + session controls)
-  - Auth panel (sign-in options)
-  - Hero entry (add todo form)
-  - Work list + archive toggle
-  - Archive list (optional)
-  - Summaries panel (hidden unless data exists)
+## Design Philosophy
 
-## Components & Refresh Flow
-- `public/state.js` holds `{ session, summaries }` and exposes `setSession`, `setSummaries`, `onRefresh`, `refreshUI`.
-- `public/ui.js` registers refresh listeners to update panels and hero state; `public/avatar.js` and `public/summary.js` also register refresh work.
-- Session changes:
-  - On login: `completeLogin()` (in `public/auth.js`) sets session, fetches summaries, calls `refreshUI()`, then reloads the page to pull todo lists.
-  - On logout: clears session and summaries via state helpers and calls `refreshUI()`.
-- Summaries:
-  - `public/summary.js` calls `/ai/summary/latest?owner=npub…` and stores `{ day, week }` via `setSummaries`.
-  - `updateSummaryUI()` shows/hides the summaries panel based on presence of day/week/suggestions and session.
-- Todos:
-  - Server renders active and archive lists; after login the page reload ensures the latest todos.
-  - Form submissions post to server routes and redirect.
-- Avatar menu:
-  - Toggle via button; closes on outside click; loads profile picture via nostr libs.
+The UI is designed to feel like writing in a personal diary:
+- **Warm color palette**: Cream backgrounds, ivory surfaces, warm browns
+- **Serif typography**: Georgia for headers and dates
+- **Minimal chrome**: Focus on the writing, not the interface
+- **One thing at a time**: Entry flow guides you through each of the three things
+
+## Page Structure
+
+Single HTML page rendered server-side in `src/render/home.ts`:
+
+```
+┌─────────────────────────────────────┐
+│  Header (title + avatar menu)       │
+├─────────────────────────────────────┤
+│  Auth Panel (when logged out)       │
+│  - Welcome message                  │
+│  - "Begin Writing, Anon" button     │
+│  - Advanced options (extension,     │
+│    bunker, secret)                  │
+├─────────────────────────────────────┤
+│  Journal (when logged in)           │
+│  ┌─────────────────────────────────┐│
+│  │ Today Section                   ││
+│  │ - Date header                   ││
+│  │ - Completed entries (clickable) ││
+│  │ - Entry form (current slot)     ││
+│  │ - Progress indicator            ││
+│  └─────────────────────────────────┘│
+│  ┌─────────────────────────────────┐│
+│  │ History Section                 ││
+│  │ - "Looking Back" header         ││
+│  │ - Past days with entries        ││
+│  │ - Load more button              ││
+│  └─────────────────────────────────┘│
+├─────────────────────────────────────┤
+│  Modals (hidden by default)         │
+│  - PIN modal                        │
+│  - Profile modal                    │
+│  - QR code modal                    │
+└─────────────────────────────────────┘
+```
+
+## Entry Flow
+
+### Adding Entries
+1. User sees prompt: "What made today good?"
+2. Types in textarea, presses "Continue" (or Shift+Enter)
+3. Entry encrypts and saves; appears above as completed
+4. Next prompt: "What else are you grateful for?"
+5. Repeat for third: "One more thing..."
+6. After 3 entries: "All three things captured"
+
+### Editing Entries
+- Click any completed entry to edit it
+- Form populates with existing content
+- Press Escape to cancel editing
+- Editing only available for today's entries
 
 ## Styling
-- All CSS lives in `public/app.css`.
-- To update colors/spacing:
-  - Modify existing selectors directly in `app.css`.
-  - Keep component class names: `.summary-panel`, `.summary-card`, `.todo-body`, `.auth-panel`, etc.
-- Layout:
-  - Page constrained to `max-width: 640px` with padding.
-  - Flex/grid used in small areas (e.g., `.summary-grid`).
-- Adding new components:
-  - Add markup in `renderHomePage` in `src/render/home.ts`.
-  - Add matching styles in `public/app.css`.
-  - Wire data via client modules; hook into `state`/`refreshUI()` for dynamic pieces.
 
-## Refresh Patterns (when to call what)
-- After any state mutation on the client (login/logout, summaries fetched): call `refreshUI()`.
-- For todo changes, server posts redirect to `/`; page reload handles state; no client mutation needed.
-- Summaries data loads on login and when `fetchSummaries()` is invoked; call `updateSummaryUI()` afterward (already done in `fetchSummaries()`).
+### Theme Variables (`public/app.css`)
 
-## Quick Style Tweaks Checklist
-1) Edit `public/app.css` (colors, radius, spacing, typography).
-2) Keep CSS selectors stable; avoid adding new fonts unless necessary.
-3) Run `bun run lint` to ensure inline script parses.
-4) Use `bun dev --hot` for live reload when tweaking styles.
+```css
+:root {
+  --bg: #f8f5f0;           /* Page background (warm cream) */
+  --surface: #fffcf7;       /* Card background (ivory) */
+  --surface-warm: #faf7f2;  /* Hover states */
+  --border: #e8e2d9;        /* Borders */
+  --border-soft: #efe9e0;   /* Subtle dividers */
+  --text: #3d3833;          /* Main text (warm charcoal) */
+  --text-warm: #5c554d;     /* Secondary text */
+  --muted: #7a7267;         /* Muted text */
+  --accent: #8b7355;        /* Buttons, highlights (warm brown) */
+  --accent-light: #a69076;  /* Hover accent */
+  --success: #6b8f71;       /* Completion state */
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+```
+
+### Key Components
+
+| Class | Purpose |
+| ----- | ------- |
+| `.today-section` | Main journal card for today |
+| `.completed-entry` | Saved entry (clickable to edit) |
+| `.entry-form` | Current entry input form |
+| `.entry-input` | Textarea for writing |
+| `.entry-prompt` | Italic prompt text |
+| `.history-section` | Past entries container |
+| `.history-day` | Single day's entries card |
+| `.auth-panel` | Login options |
+| `.avatar-menu` | Profile dropdown |
+
+### Mobile Optimizations
+
+- `touch-action: manipulation` prevents double-tap zoom
+- `font-size: 16px` on inputs prevents iOS auto-zoom
+- Viewport: `maximum-scale=1, user-scalable=no`
+- Pull-to-refresh on touch devices
+
+## Client Modules
+
+### `entries.js`
+- Manages today's entries and history
+- Handles encryption/decryption via `entryCrypto.js`
+- Renders completed entries and form state
+- Wires up edit functionality
+
+### `avatar.js`
+- Avatar button and dropdown menu
+- Profile modal (view and edit)
+- Fetches profiles from Nostr relays
+- Caches profiles in localStorage
+
+### `auth.js`
+- Login methods (ephemeral, extension, secret, bunker)
+- Auto-login on page load
+- Logout and session cleanup
+
+### `pullRefresh.js`
+- Touch gesture detection
+- Pull indicator animation
+- Triggers page reload
 
 ## Visibility Rules
-- Auth panel: hidden when `state.session` exists.
-- Session controls: shown when `state.session` exists.
-- Summaries panel: hidden unless session exists AND at least one of day/week/suggestions is present.
-- Hero input: disabled without session.
+
+| Element | Visible When |
+| ------- | ------------ |
+| Auth panel | No session |
+| Avatar button | Has session |
+| Journal section | Has session |
+| Entry form | < 3 entries today, or editing |
+| Today status | All 3 entries complete |
+| History section | Has session |
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+| -------- | ------ |
+| Shift+Enter | Save current entry |
+| Escape | Cancel editing |
+
+## Adding UI Features
+
+1. Add markup in `src/render/home.ts`
+2. Add styles in `public/app.css`
+3. Add element refs in `public/dom.js`
+4. Add behavior in appropriate module
+5. Bump service worker cache version

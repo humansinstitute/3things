@@ -1,63 +1,97 @@
 # Data Model
 
-This app stores todos and AI summaries in SQLite (`do-the-other-stuff.sqlite`). All records are scoped by `owner` (npub). Schema creation and migrations are in `src/db.ts`.
+Three Things stores encrypted gratitude journal entries in SQLite (`three-things.sqlite`). All records are scoped by `owner` (npub). Schema creation is in `src/db.ts`.
 
 ## Tables
 
-### `todos`
-Tasks owned by a user.
+### `entries`
+Encrypted journal entries, 3 per day per user.
 
-| Column         | Type    | Notes                                                   |
-| -------------- | ------- | ------------------------------------------------------- |
-| `id`           | INTEGER | PK AUTOINCREMENT                                        |
-| `title`        | TEXT    | Required                                                |
-| `description`  | TEXT    | Free text                                               |
-| `priority`     | TEXT    | `rock` \| `pebble` \| `sand`; default `sand`            |
-| `state`        | TEXT    | `new` \| `ready` \| `in_progress` \| `done`; default `new` |
-| `done`         | INTEGER | 0/1 mirror of `state === "done"`                        |
-| `deleted`      | INTEGER | Soft delete flag; 0 active, 1 deleted                   |
-| `owner`        | TEXT    | npub; required                                          |
-| `created_at`   | TEXT    | Default `CURRENT_TIMESTAMP`                             |
-| `scheduled_for`| TEXT    | `YYYY-MM-DD` or NULL; used for horizon and overdue logic |
-| `tags`         | TEXT    | Comma-separated tags (e.g., `"work,urgent"`); default `''` |
-
-Behavior:
-- Soft delete via `deleted`.
-- Scheduling: `scheduled_for` in the past counts as overdue and is returned in the scheduled feed (treated as “today” urgent).
-- Updates set `done` automatically when `state` is `done`.
-- Listing filters: active lists exclude `deleted = 1`; archive lists are `state === "done"`.
-
-### `ai_summaries`
-Free-text summaries per owner and date.
-
-| Column        | Type    | Notes                                                   |
-| ------------- | ------- | ------------------------------------------------------- |
-| `id`          | INTEGER | PK AUTOINCREMENT                                        |
-| `owner`       | TEXT    | npub; required                                          |
-| `summary_date`| TEXT    | `YYYY-MM-DD`; anchor date for day/week views            |
-| `day_ahead`   | TEXT    | Optional free text (day view)                           |
-| `week_ahead`  | TEXT    | Optional free text (week view)                          |
-| `suggestions` | TEXT    | Optional free text                                      |
-| `created_at`  | TEXT    | Default `CURRENT_TIMESTAMP`                             |
-| `updated_at`  | TEXT    | Default `CURRENT_TIMESTAMP`; refreshed on upsert        |
+| Column              | Type    | Notes                                           |
+| ------------------- | ------- | ----------------------------------------------- |
+| `id`                | INTEGER | PK AUTOINCREMENT                                |
+| `owner`             | TEXT    | npub; required                                  |
+| `entry_date`        | TEXT    | `YYYY-MM-DD` in user's local timezone           |
+| `slot`              | INTEGER | 1, 2, or 3 (the three daily things)             |
+| `encrypted_content` | TEXT    | NIP-44 encrypted ciphertext                     |
+| `created_at`        | TEXT    | Default `CURRENT_TIMESTAMP`                     |
+| `updated_at`        | TEXT    | Default `CURRENT_TIMESTAMP`; refreshed on edit  |
 
 Constraints:
-- `UNIQUE(owner, summary_date)`; upsert overwrites the row and bumps `updated_at`.
+- `UNIQUE(owner, entry_date, slot)` - one entry per slot per day per user
+- Upsert pattern: editing an entry overwrites the existing row for that slot
 
-Selection rules:
-- Latest day summary: row where `summary_date` == today, ordered by `updated_at` desc.
-- Latest week summary: most recent row whose `summary_date` falls in the current week (Mon–Sun), preferring newest `updated_at`.
+Behavior:
+- Entries are encrypted client-side using NIP-44 before being sent to the server
+- Server stores only ciphertext; cannot read entry content
+- Decryption happens client-side using the user's signing method
+- Dates are determined by the client's local timezone
+
+### Legacy Tables (unused)
+
+The following tables exist from the previous todo app but are not used:
+
+- `todos` - Previous task management data
+- `ai_summaries` - Previous AI summary feature data
+
+## Encryption
+
+All entry content is encrypted using NIP-44:
+
+1. **Encryption**: Client encrypts to user's own pubkey (self-encryption)
+2. **Storage**: Server receives and stores only ciphertext
+3. **Decryption**: Client decrypts using user's secret key via:
+   - Browser extension (NIP-07 `nip44.decrypt`)
+   - Ephemeral key (stored in localStorage)
+   - PIN-protected secret (decrypted in memory)
+   - Bunker signer (NIP-46)
 
 ## Ownership & Auth
-- All DB rows include `owner` (npub). The web app uses nostr-auth sessions in memory (`src/server.ts`), not persisted.
-- AI endpoints are localhost-only and require `owner` as a query/body field; no auth token.
 
-## Derived Lists
-- Active todos: `deleted = 0` and `state != 'done'`.
-- Archive: `state = 'done'`.
-- Scheduled feed: `scheduled_for` <= requested end date (includes overdue).
-- Unscheduled feed: `scheduled_for IS NULL OR = ''`.
-- Tag filtered: todos where `tags` contains at least one of the requested tags (case-insensitive match).
+- All DB rows include `owner` (npub)
+- Web app uses Nostr auth with sessions stored in memory (`src/server.ts`)
+- Session cookie (`nostr_session`) maps to in-memory session data
+- No server-side user accounts; identity comes from Nostr keypair
+
+## API Endpoints
+
+### `GET /entries?date=YYYY-MM-DD`
+Fetch entries for a specific date.
+
+Response:
+```json
+{
+  "entries": [
+    {
+      "id": 1,
+      "owner": "npub1...",
+      "entry_date": "2025-01-06",
+      "slot": 1,
+      "encrypted_content": "<nip44-ciphertext>",
+      "created_at": "2025-01-06 10:30:00",
+      "updated_at": "2025-01-06 10:30:00"
+    }
+  ]
+}
+```
+
+### `GET /entries/recent?before=YYYY-MM-DD&limit=30`
+Fetch recent entries before a date (for history/pagination).
+
+### `POST /entries`
+Save or update an entry (upsert by owner + date + slot).
+
+Body:
+```json
+{
+  "entry_date": "2025-01-06",
+  "slot": 1,
+  "encrypted_content": "<nip44-ciphertext>"
+}
+```
 
 ## Not Stored
-- Sessions are kept in-memory (`sessions` Map in `src/server.ts`), not in SQLite.
+
+- **Sessions**: Kept in-memory (`sessions` Map in `src/server.ts`), not in SQLite
+- **Decrypted content**: Never sent to or stored on server
+- **User profiles**: Fetched from Nostr relays, cached in browser localStorage
